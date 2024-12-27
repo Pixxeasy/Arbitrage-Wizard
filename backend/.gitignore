@@ -1,4 +1,4 @@
 .conda
 *__pycache__
-./conf/data.db
+conf/data.db
 .env
