@@ -1,14 +1,3 @@
-def convertSymbol(str: str):
-    str = str.upper()
-    if "_" in str:
-        return str.replace("_", "/")
-    if "-" in str:
-        return str.replace("-","/")
-    
-    base = str[:-4]
-
-    return f"{base}/{str[-4:]}"
-
 def convertChainName(name: str):
     if "BNB" in name:
         return "BEP20"
@@ -57,8 +46,7 @@ class Chain():
 class TradingPair():
     def __init__(self, symbol, exchange, sellPrice: float=0, buyFee: float=0, sellFee: float=0, buyPrice: float=0):
     
-        self.symbol = convertSymbol(symbol)
-        self.ex_symbol = symbol
+        self.symbol = symbol
         self.sellPrice = sellPrice
         self.buyPrice = buyPrice
         self.exchange = exchange
