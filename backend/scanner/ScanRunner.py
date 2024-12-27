@@ -39,7 +39,7 @@ class ScanRunner():
 
     async def start(self, connection, exchangeList):
         self.db = connection.session
-        self.loadExchanges(exchangeList)
+        await self.loadExchanges(exchangeList)
         
         self.task = asyncio.create_task(run_periodic(1.0, self.checkArbitrage))
 
@@ -52,7 +52,7 @@ class ScanRunner():
         except asyncio.CancelledError:
             pass
 
-    def loadExchanges(self, exchangeList):
+    async def loadExchanges(self, exchangeList):
 
         load_dotenv()
         for ex in exchangeList:
@@ -60,7 +60,11 @@ class ScanRunner():
                 module = import_module(f"model.exchanges.{ex}")
                 ex_class = getattr(module,ex)
                 if issubclass(ex_class, BaseExchange):
-                    instance = ex_class()
+                    if ex_class.isAsync:
+                        instance = await ex_class.create()
+                        print(instance)
+                    else:
+                        instance = ex_class()
                     self.exchanges.append(instance)
                     self.exchangeMap[instance.configKey] = instance
                 else:
@@ -141,7 +145,7 @@ class ScanRunner():
                         if cb.withdraw and cs.deposit:
 
                             #Get orderbook of coin on buy exchange       
-                            buy_orders = self.exchangeMap[buy.exchange].getOrders(buy.ex_symbol)
+                            buy_orders = self.exchangeMap[buy.exchange].getOrders(buy.symbol)
                         
                             #Get coins after buy
                             buy_coins, buy_rate = self.getTotalPrice(buy_orders,amount, "buy")
@@ -154,7 +158,7 @@ class ScanRunner():
                             real_buy_price = buy_coins * (1-buy.buyFee) - cb.fee
                             
                             #Get orderbook of coin on sell exchange
-                            sell_orders = self.exchangeMap[sell.exchange].getOrders(sell.ex_symbol)
+                            sell_orders = self.exchangeMap[sell.exchange].getOrders(sell.symbol)
                             
                             #Get amount of usdt after sell
                             sell_coins, sell_rate = self.getTotalPrice(sell_orders,real_buy_price, "sell")
