@@ -1,0 +1,5 @@
+{
+    "search_interval": 10,
+    "db_name": "data.db",
+    "exchanges": ["Bitget", "XT", "MEXC"]
+}
