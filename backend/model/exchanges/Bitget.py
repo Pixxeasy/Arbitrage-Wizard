@@ -9,24 +9,21 @@ class Bitget(BaseExchange):
     def __init__(self):
         super().__init__("Bitget", "btg", "bitget")
 
-        self.tradingPairs = self.getAvailablePairs()
-        
-    def getAvailablePairs(self):
+    async def loadTradingPairs(self):
         pairs = {}
-        print("Load Trading Pairs of Bitget")
-        symbols = self.exchange.fetch_markets()
+        symbols = await self.exchange.fetch_markets()
 
-        currencies = self.exchange.fetch_currencies()
+        currencies = await self.exchange.fetch_currencies()
 
-        for symbol in tqdm(symbols):
+        for symbol in symbols:
             if symbol["type"] != "spot":
                 continue
 
-            if symbol["quote"] == "USDT" and symbol["active"]:
-                if  not currencies[symbol["base"]]:
+            if symbol["quote"] == "USDT" and symbol["info"]["status"]=="online":
+                if symbol["base"] not in currencies.keys():
                     continue      
                 curChains = currencies[symbol["base"]]["networks"]
-                pair = TradingPair(symbol["symbol"], self.configKey ,buyFee=float(symbol["maker"]), sellFee=float(symbol["taker"]))
+                pair = TradingPair(symbol["symbol"], self.configKey ,fee=float(symbol["taker"]))
                        
                 for key, c in curChains.items():
 
@@ -36,4 +33,4 @@ class Bitget(BaseExchange):
 
                 pairs[pair.symbol] = pair
         
-        return pairs
+        self.tradingPairs = pairs

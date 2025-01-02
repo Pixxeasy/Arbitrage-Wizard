@@ -7,28 +7,22 @@ class XT(BaseExchange):
 
     def __init__(self):
         super().__init__("XT", "xt", "xt")
-
-        self.tradingPairs = self.getAvailablePairs()
-
-        self.market = self.exchange.load_markets()
     
-    def getAvailablePairs(self):
-        print("Load Trading Pairs of XT")
-
+    async def loadTradingPairs(self):
         pairs = {}
-        symbols = self.exchange.fetch_markets()
+        symbols = await self.exchange.fetch_markets()
 
-        currencies = self.exchange.fetch_currencies()
-        for symbol in tqdm(symbols):
+        currencies = await self.exchange.fetch_currencies()
+        for symbol in symbols:
             if symbol["type"] != "spot":
                 continue
 
-            if symbol["quote"] == "USDT" and symbol["active"]:
-                if  not currencies[symbol["base"]]:
+            if symbol["quote"] == "USDT" and symbol["info"]["state"]=="ONLINE":
+                if symbol["base"] not in currencies.keys():
                     continue      
                 curChains = currencies[symbol["base"]]["networks"]
 
-                pair = TradingPair(symbol["symbol"], self.configKey ,buyFee=float(symbol["info"]["makerFeeRate"]), sellFee=float(symbol["info"]["takerFeeRate"]))
+                pair = TradingPair(symbol["symbol"], self.configKey , fee=float(symbol["info"]["takerFeeRate"]))
                        
                 for key, c in curChains.items():
 
@@ -38,4 +32,20 @@ class XT(BaseExchange):
 
                 pairs[pair.symbol] = pair
         
-        return pairs
+        self.tradingPairs = pairs
+    
+    async def getPrices(self):
+
+        prices = await self.exchange.fetch_bids_asks()
+
+        for symbol,ticker in prices.items():
+
+            if symbol[-4:].upper() == "USDT":
+               
+                if symbol in list(self.tradingPairs.keys()):
+                    if ticker["ask"]:
+                        self.tradingPairs[symbol].buyPrice = float(ticker["ask"])
+                        
+                    if ticker["bid"]:
+                        self.tradingPairs[symbol].sellPrice = float(ticker["bid"])
+                    
