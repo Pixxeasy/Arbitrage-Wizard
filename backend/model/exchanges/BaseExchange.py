@@ -4,7 +4,9 @@ from sqlalchemy import Column, Integer, String
 from model.BaseModel import Base
 import uuid
 import os
-import ccxt
+import ccxt.async_support as ccxt
+from ccxt.base.errors import ExchangeError
+import asyncio
 
 namespace = uuid.UUID("1b4b0697-54a1-4e3b-b3c4-ca83f29e2499")
 
@@ -26,28 +28,29 @@ class BaseExchange(Base):
         self.apiSecret = os.getenv(f"{name.upper()}_API_SECRET")
         self.passphrase = os.getenv(f"{name.upper()}_API_PASSPHRASE")
         self.exchange = getattr(ccxt, ccxt_id)()
-        
-        self.markets = self.exchange.load_markets()
 
-    def getPrices(self):
+    async def getPrices(self):
         if not self.exchange.has['fetchTickers']:
             print("Exchange " + self.name + " does not support ticker")
-        prices = self.exchange.fetch_tickers()
+        prices = await self.exchange.fetch_tickers()
 
         for symbol,ticker in prices.items():
 
             if symbol[-4:].upper() == "USDT":
                
                 if symbol in list(self.tradingPairs.keys()):
-                    if not ticker["ask"] or not ticker["bid"]:
-                        continue
+                    if ticker["ask"]:
+                        self.tradingPairs[symbol].buyPrice = float(ticker["ask"])
+                    if ticker["bid"]:
+                        self.tradingPairs[symbol].sellPrice = float(ticker["bid"])
 
-                    self.tradingPairs[symbol].buyPrice = float(ticker["ask"])
-                    self.tradingPairs[symbol].sellPrice = float(ticker["bid"])
-
-    
-    def getOrders(self, symbol):
-        orderbook = self.exchange.fetch_order_book(symbol)
+    async def getOrders(self, symbol):
+        try:
+            orderbook = await self.exchange.fetch_order_book(symbol)
+        except ExchangeError as e:
+            #print(e.args)
+            await asyncio.sleep(1)
+            return await self.getOrders(symbol)
 
         book = {}
         book["buy"] = []
