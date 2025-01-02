@@ -2,7 +2,7 @@
 
 class ArbitrageOpportunity():
 
-    def __init__(self, sellExchange, buyExchange, sellPrice, buyPrice, profit, tradingPair, chain):
+    def __init__(self, sellExchange, buyExchange, sellPrice, buyPrice, profit, tradingPair, chain, usdtAmount):
         self.sellExchange = sellExchange
         self.buyExchange = buyExchange
         self.sellPrice = sellPrice
@@ -10,6 +10,7 @@ class ArbitrageOpportunity():
         self.profit = profit
         self.tradingPair = tradingPair
         self.chain = chain
+        self.ustdAmount = usdtAmount
         pass
 
     def toDict(self):
@@ -20,5 +21,6 @@ class ArbitrageOpportunity():
             "chain": self.chain,
             "sellExchange": self.sellExchange,
             "sellPrice": self.sellPrice,
-            "profit": self.profit
+            "profit": self.profit,
+            "usdtAmount": self.ustdAmount
         }
