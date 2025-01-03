@@ -5,7 +5,7 @@ from model.BaseModel import Base
 import uuid
 import os
 import ccxt.async_support as ccxt
-from ccxt.base.errors import ExchangeError
+from ccxt.base.errors import ExchangeError, RateLimitExceeded,ExchangeNotAvailable
 import asyncio
 
 namespace = uuid.UUID("1b4b0697-54a1-4e3b-b3c4-ca83f29e2499")
@@ -48,9 +48,11 @@ class BaseExchange(Base):
         try:
             orderbook = await self.exchange.fetch_order_book(symbol)
         except ExchangeError as e:
-            #print(e.args)
+            print(e.args)
             await asyncio.sleep(1)
             return await self.getOrders(symbol)
+        except ExchangeNotAvailable:
+            return None
 
         book = {}
         book["buy"] = []
