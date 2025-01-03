@@ -5,11 +5,13 @@ from sqlalchemy.exc import IntegrityError
 from datetime import datetime
 
 from model.exchanges.Bitget import Bitget, BaseExchange
-from model.ArbitrageModel import ArbitrageOpportunity
+from model.ArbitrageModel import ArbitrageOpportunity, ArbitrageGroup
 from dotenv import load_dotenv
 import pandas as pd
 import tqdm.asyncio as tqdm_aync
 from collections import Counter
+
+pd.set_option('display.max_columns', None)
 
 class ScanRunner():
     def __init__(self, interval: float):
@@ -107,7 +109,6 @@ class ScanRunner():
             if side=="buy":
                 if amountLeft <= o["usdt_amount"]:
                     totalPrice += (amountLeft/o["price"])*(1-fee)
-                    totalPrice = totalPrice
                     return totalPrice, amount/totalPrice, i
                 else:
                     totalPrice += o["qty"] * (1-fee)
@@ -173,22 +174,29 @@ class ScanRunner():
                     #Calculate minimum amount of profit
                     minAmount = self.calculateMinProfitAmount(buy.buyPrice, sell.sellPrice,cb.fee,buy.fee, sell.fee,1)
                     if max(minAmount, cb.fee*buy.buyPrice) > self.maxAmount:
-                        return opportunities
+                        continue
                                             
-                    #Get orderbook of coin on buy exchange       
+                    #Get orderbook of coin on buy exchange
                     buy_orders = await self.exchangeMap[buy.exchange].getOrders(buy.symbol)
                             
                     #Get all possibilities for buying
                     buy_possibilities = self.calulateBuyPrices(buy_orders,max(minAmount, cb.fee*buy.buyPrice),sell.sellPrice,buy.fee, sell.fee, cb.fee)
-                            
+                    if len(buy_possibilities) == 0:
+                        continue
+
                     #Get orderbook of coin on sell exchange
                     sell_orders = await self.exchangeMap[sell.exchange].getOrders(sell.symbol)
                             
                     sell_ops = self.findBestSellPrice(buy_possibilities,sell_orders,sell.fee,1.0)
-                            
+
+                    if len(sell_ops) == 0:
+                        continue
+
+                    ag = ArbitrageGroup(buy.exchange, sell.exchange, pair, cb.name)
                     for op in sell_ops:
                         ao = ArbitrageOpportunity(sell.exchange,buy.exchange,op["sell_price"], op["buy_price"], op["profit"], pair,cb.name, op["usdt_amount_start"])
-                        opportunities.append(ao)
+                        ag.addOpportunity(ao)
+                    opportunities.append(ag)
 
         return opportunities
     
