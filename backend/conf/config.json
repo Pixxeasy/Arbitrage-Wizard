@@ -1,5 +1,5 @@
 {
     "search_interval": 10,
     "db_name": "data.db",
-    "exchanges": ["Bitget", "XT", "KuCoin"]
+    "exchanges": ["Bitget", "XT", "KuCoin", "MEXC"]
 }
