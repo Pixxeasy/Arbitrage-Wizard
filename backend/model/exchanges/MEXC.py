@@ -10,9 +10,9 @@ class MEXC(BaseExchange):
         self.exchange.apiKey = self.apiKey
         self.exchange.secret = self.apiSecret
         self.exchange.enableRateLimit = True
+        self.exchange.rateLimit = 20
     async def loadTradingPairs(self):
         pairs = {}
-        print("Load Trading Pairs of MEXC")
         symbols = await self.exchange.fetch_markets()
         
         currencies = await self.exchange.fetch_currencies()
