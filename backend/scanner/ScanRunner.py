@@ -46,7 +46,7 @@ class ScanRunner():
         
         if len(opportunities)>0:
             df = pd.DataFrame([ao.toDict() for ao in opportunities])
-            print(df.sort_values(by=["profit"], ascending=False))
+            print(df.sort_values(by=["minProfit"], ascending=False))
         print(f"Took {(timeEnd-timeStart).total_seconds()} seconds")
 
     async def start(self, connection, exchangeList):
@@ -54,6 +54,7 @@ class ScanRunner():
         await self.loadExchanges(exchangeList)
         
         self.task = asyncio.create_task(run_periodic(1.0, self.checkArbitrage))
+        await self.task
 
     async def stop(self):
         for ex in self.exchanges:
@@ -109,7 +110,7 @@ class ScanRunner():
             if side=="buy":
                 if amountLeft <= o["usdt_amount"]:
                     totalPrice += (amountLeft/o["price"])*(1-fee)
-                    return totalPrice, amount/totalPrice, i
+                    return totalPrice, amount/totalPrice
                 else:
                     totalPrice += o["qty"] * (1-fee)
                     amountLeft -= o["usdt_amount"]
@@ -117,15 +118,15 @@ class ScanRunner():
             elif side=="sell":
                 if amountLeft <= o["qty"]:
                     totalPrice += amountLeft*o["price"]*(1-fee)
-                    return totalPrice, totalPrice/amount, i
+                    return totalPrice, totalPrice/amount
                 else:
                     totalPrice += o["usdt_amount"]*(1-fee)
                     amountLeft -= o["qty"]
                     
         if side == "sell":
-            return totalPrice, totalPrice/amount, i
+            return totalPrice, totalPrice/amount
         elif side == "buy":
-            return totalPrice, amount/totalPrice, i
+            return totalPrice, amount/totalPrice
 
     
     async def findOpportunities(self, pair):
@@ -193,9 +194,7 @@ class ScanRunner():
                         continue
 
                     ag = ArbitrageGroup(buy.exchange, sell.exchange, pair, cb.name)
-                    for op in sell_ops:
-                        ao = ArbitrageOpportunity(sell.exchange,buy.exchange,op["sell_price"], op["buy_price"], op["profit"], pair,cb.name, op["usdt_amount_start"])
-                        ag.addOpportunity(ao)
+                    ag.setOpportunities(sell_ops)
                     opportunities.append(ag)
 
         return opportunities
@@ -205,81 +204,80 @@ class ScanRunner():
         second = (1 - buyFee) * sellPrice * (1 - sellFee) / buyPrice - (1+(profit/100))
         
         return first/second
-    
+
+    def _calculateMinBuyAmount(self, sellPrice, withdrawFee, buyFee, buyPrice, amount, level, buyOrders ):
+
+        totalPrice = sum(buyOrders[i]["qty"] for i in range(level+1))
+        numerator = sellPrice * totalPrice * (1-buyFee) - amount - sellPrice * withdrawFee
+        denominator = (1+ (sellPrice*(1-buyFee)/buyPrice))
+
+        return numerator/denominator
+
+
+
     def calulateBuyPrices(self, buyOrders, amount, sellPrice, buyFee, sellFee, withdrawFee):
         possibilities = []
-        startAmount = amount
-        
         buyPrice = buyOrders["buy"][0]["price"]
-        
+        sellPrice_with_fee = sellPrice * (1 - sellFee)
+        minAmount = amount
+        currentAmount = 0
+
         #Buyprice already too high
-        if buyPrice*(1+buyFee)>=sellPrice*(1-sellFee):
+        if buyPrice*(1+buyFee)>=sellPrice_with_fee:
             return possibilities
-        
-        #Get initial price and rate        
-        total, rate, level = self.getTotalPrice(buyOrders,amount,"buy", buyFee)
-        initAmount = sum([buyOrders["buy"][i]["usdt_amount"] for i in range(level)])
-        realPrice = total - withdrawFee
-        realRate = amount/realPrice
-        
-        if realRate > sellPrice:
-            return possibilities
-        
-        if realPrice > 0:
-            possibilities.append({"real_price": realPrice, "rate": rate, "amount": amount})
-        
-        amount = initAmount
-        for i in range(level, len(buyOrders["buy"])):
-            o = buyOrders["buy"][i]
-            currentAmount = min(amount+o["usdt_amount"],self.maxAmount)
-            
-            total, rate, level = self.getTotalPrice(buyOrders, currentAmount, "buy", buyFee)
-            realPrice = total - withdrawFee
-            realRate = currentAmount/realPrice
-                
-            if realRate > sellPrice:
-                if level>0:
-                    numerator = sellPrice * sum([buyOrders["buy"][i]["qty"] for i in range(level)]) - amount - sellPrice * withdrawFee
-                    denominator = 1 - (sellPrice * (1 - buyFee) / o["price"])
-                else:
-                    numerator = - sellPrice * withdrawFee
-                    denominator = 1 - (sellPrice*((1-buyFee)/o["price"]))                
-                
-                add_amount = numerator/denominator
-                if add_amount > o["usdt_amount"]:
-                    amount += o["usdt_amount"]
-                    continue
-                if add_amount < 0:
-                    return possibilities
-                
-                amount += add_amount
-                currentAmount = min(amount, self.maxAmount)
-                total, rate, level = self.getTotalPrice(buyOrders, currentAmount, "buy", buyFee)
-                realPrice = total - withdrawFee
-                realRate = currentAmount/realPrice
-                if realRate < sellPrice:
-                    possibilities.append({"real_price": realPrice, "rate": rate, "amount": currentAmount})
-                return possibilities
-            
-            elif currentAmount == self.maxAmount:
-                possibilities.append({"real_price": realPrice, "rate": rate, "amount": currentAmount})
-                return possibilities
 
-            possibilities.append({"real_price": realPrice, "rate": rate, "amount": currentAmount})
-            amount += o["usdt_amount"]
-    
-    def findBestSellPrice(self, buy_possibilities, orders, sell_fee, profit_percent):
-        possibilities = []
-        
-        for pos in sorted(buy_possibilities, key=lambda p: p["real_price"], reverse=True):
-            real_sell_price, sell_rate,i = self.getTotalPrice(orders,pos["real_price"], "sell", sell_fee)
+        for i in range(len(buyOrders["buy"])):
+            order = buyOrders["buy"][i]
+            currentAmount += order["usdt_amount"]
+            currentAmount = min(currentAmount, self.maxAmount)
+            maxTotal, maxRate = self.getTotalPrice(buyOrders, currentAmount, "buy", buyFee)
+            maxRealTotal = maxTotal - withdrawFee
+            maxRealRate = currentAmount / maxRealTotal
 
-            
-            real_profit = real_sell_price - pos["amount"]
-            if real_profit > pos["amount"] * (profit_percent/100):
-                possibilities.append({"profit": real_profit, "usdt_amount_end": real_sell_price, "usdt_amount_start": pos["amount"], "buy_price": pos["rate"], "sell_price": sell_rate})
-                
+            if maxRealRate > sellPrice_with_fee:
+                continue
+
+            remove_amount = self._calculateMinBuyAmount(sellPrice_with_fee, withdrawFee,buyFee,order["price"],currentAmount,i, buyOrders["buy"])
+
+            if (remove_amount < 0) or (currentAmount-remove_amount < minAmount):
+                continue
+
+            minBuyAmount = currentAmount - remove_amount
+
+            minTotal, minRate = self.getTotalPrice(buyOrders, minBuyAmount, "buy", buyFee)
+            minRealTotal = minTotal - withdrawFee
+            minRealRate = minBuyAmount/ minRealTotal
+
+            if (minRealRate > sellPrice_with_fee):
+                continue
+
+            possibilities.append({
+                "minAmount": minBuyAmount,
+                "maxAmount": currentAmount,
+                "minRate": minRate,
+                "maxRate": maxRate,
+                "minRealTotal": minRealTotal,
+                "maxRealTotal": maxRealTotal,
+            })
+
+            if currentAmount == self.maxAmount:
+                return possibilities
         return possibilities
 
-            
-            
+    def findBestSellPrice(self, buy_possibilities, orders, sell_fee, profit_percent):
+        opportunities = []
+
+        for pos in buy_possibilities:
+            minRealSellPrice, minRealSellRate = self.getTotalPrice(orders, pos["minRealTotal"], "sell", sell_fee)
+            maxRealSellPrice, maxRealSellRate = self.getTotalPrice(orders, pos["maxRealTotal"], "sell", sell_fee)
+
+            minProfit = minRealSellPrice - pos["minAmount"]
+            maxProfit = maxRealSellPrice - pos["maxAmount"]
+
+            if (minProfit > pos["minAmount"] * (profit_percent / 100)) and (
+                    maxProfit > pos["maxAmount"] * (profit_percent / 100)):
+                ao = ArbitrageOpportunity(pos["minAmount"], pos["maxAmount"], minRealSellPrice, maxRealSellPrice,
+                                          minProfit, maxProfit, pos["minRate"], minRealSellRate)
+                opportunities.append(ao)
+
+        return opportunities
