@@ -18,10 +18,10 @@ class DBConnector():
 
     def connect(self):
         self.engine = create_engine(f"sqlite:///{self.path}", echo=True)
-
-
         self.buildStructure()
         self.initData()
+
+        return self.session
       
 
     def buildStructure(self):
