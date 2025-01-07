@@ -6,7 +6,7 @@ from model.User import User
 from model.exchanges.BaseExchange import BaseExchange
 import json
 import uuid
-from .util import create_HMAC
+from passlib.hash import pbkdf2_sha256
 
 namespace = uuid.UUID("1b4b0697-54a1-4e3b-b3c4-ca83f29e2499")
 
@@ -18,10 +18,10 @@ class DBConnector():
 
     def connect(self):
         self.engine = create_engine(f"sqlite:///{self.path}", echo=True)
-
-
         self.buildStructure()
         self.initData()
+
+        return self.session
       
 
     def buildStructure(self):
@@ -34,7 +34,7 @@ class DBConnector():
                 users = json.load(file)
                 
                 users = [{**u, "guid": str(uuid.uuid5(namespace, f"user:{u['name']}")), "salt": str(uuid.uuid4())} for u in users]
-                users = [{**u, "password": create_HMAC(u["password"], u["salt"])} for u in users]
+                users = [{**u, "password": pbkdf2_sha256.using(salt=u["salt"].encode(encoding="utf-8")).hash(u["password"])} for u in users]
                 users = [User(**u) for u in users]
    
                 self.session.add_all(users)
