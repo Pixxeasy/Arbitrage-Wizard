@@ -14,3 +14,7 @@ class LoginResult(BaseModel):
         self.token = token
         self.expires = expires
         self.success = success
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
