@@ -24,7 +24,7 @@ const LoginForm: React.FC = () => {
             formData.append('username', username);
             formData.append('password', password);
 
-            const response = await fetch(`${API_BASE_URL}/login`, { // Use the constant
+            const response = await fetch(`${API_BASE_URL}/api/auth/login`, { // Use the constant
                 method: 'POST',
                 body: formData
             });
