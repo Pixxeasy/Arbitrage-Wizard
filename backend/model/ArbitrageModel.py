@@ -1,65 +1,73 @@
+from typing import List, Dict, Any
+import pandas as pd
+from api.dependencies import DBSessionDep
 
+from pydantic import BaseModel, Field
 
-class ArbitrageOpportunity:
+from database.model.ArbitrageOpportunity import ArbitrageGroupDBO, ArbitrageOpportunityDBO
 
-    def __init__(self, minStartAmount, maxStartAmount, minEndAmount, maxEndAmount, minProfit, maxProfit, buyPrice, sellPrice):
-        self.sellPrice = sellPrice
-        self.buyPrice = buyPrice
-        self.minStartAmount = minStartAmount
-        self.maxStartAmount = maxStartAmount
-        self.minEndAmount = minEndAmount
-        self.maxEndAmount = maxEndAmount
-        self.minProfit = minProfit
-        self.maxProfit = maxProfit
+class ArbitrageOpportunity(BaseModel):
 
-    def toDict(self):
-        return {
-            "buyPrice": self.buyPrice,
-            "minStartAmount": self.minStartAmount,
-            "maxStartAmount": self.maxStartAmount,
-            "minEndAmount": self.minEndAmount,
-            "maxEndAmount": self.maxEndAmount,
-            "minProfit": self.minProfit,
-            "maxProfit": self.maxProfit,
-            "sellPrice": self.sellPrice
-        }
+    min_usdt_start: float = Field(None,gt=0)
+    min_usdt_end: float = Field(None,gt=0)
+    max_usdt_start: float = Field(None,gt=0)
+    max_usdt_end: float = Field(None,gt=0)
+    min_profit: float = Field(None,gt=0)
+    max_profit: float = Field(None,gt=0)
+    buy_price: float = Field(None,gt=0)
+    sell_price: float = Field(None,gt=0)
 
-class ArbitrageGroup:
-    def __init__(self, buyExchange, sellExchange, tradingPair, chain):
-        self.buyExchange = buyExchange
-        self.sellExchange = sellExchange
-        self.tradingPair = tradingPair
-        self.chain = chain
-        self.opportunityList = []
+    def to_DBO(self):
+        dbo = ArbitrageOpportunityDBO(**self.model_dump())
+        return dbo
 
-    def addOpportunity(self, opportunity: ArbitrageOpportunity):
-        self.opportunityList.append(opportunity)
+class ArbitrageGroup(BaseModel):
 
-    def setOpportunities(self, opportunities):
-        self.opportunityList = opportunities
+    buy_exchange_name: str
+    sell_exchange_name: str
+    buy_exchange_id: str
+    sell_exchange_id: str
+    trading_pair: str
+    chain: str
+    opportunities: List[ArbitrageOpportunity] = Field(default=[])
 
-    def toDict(self):
-        meanMinStartAmount = sum([o.minStartAmount for o in self.opportunityList]) / len(self.opportunityList)
-        meanMaxStartAmount = sum([o.maxStartAmount for o in self.opportunityList]) / len(self.opportunityList)
-        meanMinEndAmount = sum([o.minEndAmount for o in self.opportunityList]) / len(self.opportunityList)
-        meanMaxEndAmount = sum([o.maxEndAmount for o in self.opportunityList]) / len(self.opportunityList)
-        meanMinProfit = sum([o.minProfit for o in self.opportunityList]) / len(self.opportunityList)
-        meanMaxProfit = sum([o.maxProfit for o in self.opportunityList]) / len(self.opportunityList)
-        meanBuyPrice = sum([o.buyPrice for o in self.opportunityList]) / len(self.opportunityList)
-        meanSellPrice = sum([o.sellPrice for o in self.opportunityList]) / len(self.opportunityList)
+    def add_opportunity(self, opportunity: ArbitrageOpportunity):
+        self.opportunities.append(opportunity)
+
+    def set_opportunities(self, opportunities: List[ArbitrageOpportunity]):
+        self.opportunities = opportunities
+
+    def to_dict(self) -> Dict[str,Any]:
+        df = pd.DataFrame([o.model_dump() for o in self.opportunities])
 
         return {
-            "tradingPair": self.tradingPair,
-            "buyExchange": self.buyExchange,
-            "buyPrice": meanBuyPrice,
-            "minStartAmount": meanMinStartAmount,
-            "maxStartAmount": meanMaxStartAmount,
-            "minEndAmount": meanMinEndAmount,
-            "maxEndAmount": meanMaxEndAmount,
+            "tradingPair": self.trading_pair,
+            "buyExchange": self.buy_exchange_name,
+            "buyPrice": df["buy_price"].mean(),
+            "minStartAmount": df["min_usdt_start"].mean(),
+            "maxStartAmount": df["max_usdt_start"].mean(),
+            "minEndAmount": df["min_usdt_end"].mean(),
+            "maxEndAmount": df["max_usdt_end"].mean(),
             "chain": self.chain,
-            "sellExchange": self.sellExchange,
-            "sellPrice": meanSellPrice,
-            "minProfit": meanMinProfit,
-            "maxProfit": meanMaxProfit,
-            "opportunities": len(self.opportunityList)
+            "sellExchange": self.sell_exchange_name,
+            "sellPrice": df["sell_price"].mean(),
+            "minProfit": df["min_profit"].mean(),
+            "maxProfit": df["max_profit"].mean(),
+            "opportunities": len(self.opportunities),
         }
+
+    def to_DBO(self):
+        dbo = ArbitrageGroupDBO(buy_exchange_id=self.buy_exchange_id, sell_exchange_id=self.sell_exchange_id,
+                                trading_pair=self.trading_pair, chain=self.chain)
+        for op in self.opportunities:
+            dbo.opportunities.append(op.to_DBO())
+
+        return dbo
+
+class Possibility(BaseModel):
+
+    min_usdt_amount:float = Field(gt=0)
+    max_usdt_amount:float = Field(ge=0)
+    rate:float = Field(gt=0)
+    min_coin_amount:float = Field(gt=0)
+    max_coin_amount:float = Field(ge=0)
