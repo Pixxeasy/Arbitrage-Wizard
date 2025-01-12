@@ -13,7 +13,7 @@ def get_db() -> Session:
 
 def connect(path):
     global SessionLocal
-    engine = create_engine(f"sqlite:///{path}", echo=True)
+    engine = create_engine(f"sqlite:///{path}", echo=False)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base.metadata.create_all(engine)
 
