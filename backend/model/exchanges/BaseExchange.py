@@ -1,35 +1,50 @@
-
-from sqlalchemy import Column, String
-
-from database.model.BaseModel import Base
-import uuid
+import asyncio
 import os
+import uuid
+from typing import Dict, Any, Self, Optional
+
 import ccxt.async_support as ccxt
 from ccxt.base.errors import ExchangeError, ExchangeNotAvailable
-import asyncio
+from pydantic import BaseModel, Field, model_validator
+
+from model.Orders import Order, OrderBook
+from model.TradingPair import TradingPair
 
 namespace = uuid.UUID("1b4b0697-54a1-4e3b-b3c4-ca83f29e2499")
 
-class BaseExchange(Base):
-    __tablename__ = 'exchanges'
+class BaseExchange(BaseModel):
 
-    guid = Column(String, primary_key=True)
-    name = Column(String)
-    configKey = Column(String)
+    name: str = Field()
+    guid: Optional[str] = None
+    config_key: str
+    ccxt_id: str
+    trading_pairs: Dict[str, TradingPair] = Field(default={})
+    apiKey: str | None = None
+    apiSecret: str| None = None
+    passphrase: str| None = None
+    exchange: Any = None
 
-    isAsync = False
+    @model_validator(mode='after')
+    def init(self) -> Self:
+        name = self.name.upper()
+        self.apiKey = os.getenv(f"{name}_API_KEY")
+        self.apiSecret = os.getenv(f"{name}_API_SECRET")
+        self.passphrase = os.getenv(f"{name}_API_PASSPHRASE")
 
-    def __init__(self, name: str, configKey, ccxt_id):
-        self.name = name
-        self.configKey = configKey
-        self.guid = str(uuid.uuid5(namespace, f"exchange:{configKey}"))
-        self.tradingPairs = []
-        self.apiKey = os.getenv(f"{name.upper()}_API_KEY")
-        self.apiSecret = os.getenv(f"{name.upper()}_API_SECRET")
-        self.passphrase = os.getenv(f"{name.upper()}_API_PASSPHRASE")
-        self.exchange = getattr(ccxt, ccxt_id)()
+        self.exchange = getattr(ccxt, self.ccxt_id)()
+        return self
 
-    async def getPrices(self):
+    def set_api(self):
+        if self.apiKey:
+            self.exchange.apiKey = self.apiKey
+
+        if self.apiSecret:
+            self.exchange.secret = self.apiSecret
+
+        if self.passphrase:
+            self.exchange.password = self.passphrase
+
+    async def load_prices(self):
         if not self.exchange.has['fetchTickers']:
             print("Exchange " + self.name + " does not support ticker")
         prices = await self.exchange.fetch_tickers()
@@ -38,13 +53,13 @@ class BaseExchange(Base):
 
             if symbol[-4:].upper() == "USDT":
                
-                if symbol in list(self.tradingPairs.keys()):
+                if symbol in list(self.trading_pairs.keys()):
                     if ticker["ask"]:
-                        self.tradingPairs[symbol].buyPrice = float(ticker["ask"])
+                        self.trading_pairs[symbol].buy_price = float(ticker["ask"])
                     if ticker["bid"]:
-                        self.tradingPairs[symbol].sellPrice = float(ticker["bid"])
+                        self.trading_pairs[symbol].sell_price = float(ticker["bid"])
 
-    async def getOrders(self, symbol):
+    async def get_orders(self, symbol) -> OrderBook:
         try:
             orderbook = await self.exchange.fetch_order_book(symbol)
         except ExchangeError as e:
@@ -54,14 +69,16 @@ class BaseExchange(Base):
         except ExchangeNotAvailable:
             return None
 
-        book = {}
-        book["buy"] = []
-        book["sell"] = []
+        maker_fee = self.trading_pairs[symbol].fee
+
+        book = OrderBook(buy_fee=maker_fee, sell_fee=maker_fee)
 
         for ask in orderbook["asks"]:
-            book["buy"].append({"qty": float(ask[1]), "price": float(ask[0]), "usdt_amount": float(ask[0])*float(ask[1])})
+            o = Order(price=float(ask[0]), quantity=float(ask[1]))
+            book.buy_orders.append(o)
 
         for bid in orderbook["bids"]:
-            book["sell"].append({"qty": float(bid[1]), "price": float(bid[0]), "usdt_amount": float(bid[0])*float(bid[1])})
+            o = Order(price=float(bid[0]), quantity=float(bid[1]))
+            book.sell_orders.append(o)
 
         return book
