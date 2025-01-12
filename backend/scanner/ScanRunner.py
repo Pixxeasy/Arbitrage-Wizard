@@ -1,59 +1,67 @@
 import asyncio
-from importlib import import_module
-from .util import run_periodic
-from sqlalchemy.exc import IntegrityError
-from datetime import datetime
-
-from model.exchanges.Bitget import Bitget, BaseExchange
-from model.ArbitrageModel import ArbitrageOpportunity, ArbitrageGroup
-from dotenv import load_dotenv
-import pandas as pd
-import tqdm.asyncio as tqdm_aync
 from collections import Counter
+from datetime import datetime
+from importlib import import_module
+from typing import List, Dict
+
+import pandas as pd
+from dotenv import load_dotenv
+from sqlalchemy import update, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+from tqdm.asyncio import tqdm as tqdm_async
+
+from database.model.Exchange import ExchangeDBO
+from model.ArbitrageModel import ArbitrageGroup
+from model.Orders import OrderBook
+from model.exchanges.Bitget import BaseExchange
+from scanner.util import run_periodic
 
 pd.set_option('display.max_columns', None)
+pd.set_option('display.width', 1500)
 
-class ScanRunner():
-    def __init__(self, interval: float):
+class ScanRunner:
+    def __init__(self, interval: float, session: Session):
+        self.task = None
+        self.db  = session
         self.interval = interval
-        self.exchanges = []
-        self.exchangeMap = {}
+        self.exchanges: List[BaseExchange] = []
+        self.exchangeMap: Dict[str, BaseExchange] = {}
         self.maxAmount = 1000
 
-    async def checkArbitrage(self):
-        timeStart = datetime.now()
+    async def check_arbitrage(self):
+        time_start = datetime.now()
         opportunities = []
-        
-        allPairs = []
-        priceTask = []
+
+        all_pairs = []
+        price_task = []
         for ex in self.exchanges:
-            
-            priceTask.append(ex.getPrices())
+
+            price_task.append(ex.load_prices())
         
-            allPairs.extend(list(ex.tradingPairs.keys()))
+            all_pairs.extend(list(ex.trading_pairs.keys()))
         
-        allPairs = [pair for pair,count in Counter(allPairs).items() if count>1]
-        await tqdm_aync.tqdm_asyncio.gather(*priceTask, desc="Load prices")
+        all_pairs = [pair for pair,count in Counter(all_pairs).items() if count>1]
+        await tqdm_async.gather(*price_task, desc="Load prices")
 
         op_tasks = []
-        for pair in allPairs:
-            op_tasks.append(asyncio.create_task(self.findOpportunities(pair)))
+        for pair in all_pairs:
+            op_tasks.append(asyncio.create_task(self.find_opportunities(pair)))
 
-        ops = await tqdm_aync.tqdm_asyncio.gather(*op_tasks)
+        ops = await tqdm_async.gather(*op_tasks)
         opportunities = [o for op in ops for o in op]
         
-        timeEnd = datetime.now()
+        time_end = datetime.now()
         
         if len(opportunities)>0:
-            df = pd.DataFrame([ao.toDict() for ao in opportunities])
+            df = pd.DataFrame([ao.to_dict() for ao in opportunities])
             print(df.sort_values(by=["minProfit"], ascending=False))
-        print(f"Took {(timeEnd-timeStart).total_seconds()} seconds")
+        print(f"Took {(time_end-time_start).total_seconds()} seconds")
 
-    async def start(self, connection, exchangeList):
-        self.db = connection.session
-        await self.loadExchanges(exchangeList)
+    async def start(self, exchange_list):
+        await self.load_exchanges(exchange_list)
         
-        self.task = asyncio.create_task(run_periodic(1.0, self.checkArbitrage))
+        self.task = asyncio.create_task(run_periodic(1.0, self.check_arbitrage))
         await self.task
 
     async def stop(self):
@@ -67,96 +75,83 @@ class ScanRunner():
         except asyncio.CancelledError:
             pass
         
-    async def _loadExchange(self, ex_class):
+    async def _load_exchange(self, ex_class):
         instance = ex_class()
+        get_by_config_key = select(ExchangeDBO).where(ExchangeDBO.config_key == instance.config_key)
+        dbo = self.db.scalars(get_by_config_key).first()
+        if not dbo:
+            dbo = ExchangeDBO(name=instance.name, config_key=instance.config_key)
+            self.db.add(dbo)
+        else:
+            dbo.active = True
+        self.db.commit()
+        instance.guid = dbo.guid
+
         print(f"Load {instance.name} pairs")
-        await instance.loadTradingPairs()
+        await instance.load_trading_pairs()
         print(f"Finished loading {instance.name} pairs")
         self.exchanges.append(instance)
-        self.exchangeMap[instance.configKey] = instance
+        self.exchangeMap[instance.config_key] = instance
 
-    async def loadExchanges(self, exchangeList):
+    async def load_exchanges(self, exchange_list):
+        #Disable all exchanges
+        disable_all_exchanges = update(ExchangeDBO).values(active=False)
+        self.db.execute(disable_all_exchanges)
+        self.db.commit()
 
         load_dotenv()
         ex_task = []
-        for ex in exchangeList:
+        for ex in exchange_list:
             try:
                 module = import_module(f"model.exchanges.{ex}")
                 ex_class = getattr(module,ex)
                 if issubclass(ex_class, BaseExchange):
-                    ex_task.append(self._loadExchange(ex_class))
+                    ex_task.append(self._load_exchange(ex_class))
                 else:
                     print(f"Class {ex} is no subclass of BaseExchange")
                     continue
             except Exception as e:
                 print(e.with_traceback())
                 print(f"No class {ex} was found")
-            
-        await asyncio.gather(*ex_task)
+
+        await tqdm_async.gather(*ex_task,desc="Load exchanges")
         
         try:
-            self.db.add_all(self.exchanges)
             self.db.commit()
         except IntegrityError:
             pass
 
-
-    def getTotalPrice(self, orderList, amount, side, fee):
-        amountLeft = amount
-        totalPrice = 0
-    
-        
-        for i,o in enumerate(orderList[side]):
-            if side=="buy":
-                if amountLeft <= o["usdt_amount"]:
-                    totalPrice += (amountLeft/o["price"])*(1-fee)
-                    return totalPrice, amount/totalPrice
-                else:
-                    totalPrice += o["qty"] * (1-fee)
-                    amountLeft -= o["usdt_amount"]
-
-            elif side=="sell":
-                if amountLeft <= o["qty"]:
-                    totalPrice += amountLeft*o["price"]*(1-fee)
-                    return totalPrice, totalPrice/amount
-                else:
-                    totalPrice += o["usdt_amount"]*(1-fee)
-                    amountLeft -= o["qty"]
-                    
-        if side == "sell":
-            return totalPrice, totalPrice/amount
-        elif side == "buy":
-            return totalPrice, amount/totalPrice
-
-    
-    async def findOpportunities(self, pair):
+    async def find_opportunities(self, pair):
         
         opportunities = []
-        comparePrices = []
+        compare_prices = []
         for ex in self.exchanges:
-            if pair in list(ex.tradingPairs.keys()):
-                comparePrices.append(ex.tradingPairs[pair])
+            if pair in list(ex.trading_pairs.keys()):
+                compare_prices.append(ex.trading_pairs[pair])
             
          #No common trading pair in 2 exchanges was found
-        if len(comparePrices) < 2:
+        if len(compare_prices) < 2:
             return opportunities
 
+        #Filter all for which no prices have been found
+        filtered_pairs = [pair for pair in compare_prices if pair.buy_price and pair.sell_price]
+
         #Find best sell und buy price
-        sellPrices = sorted(comparePrices, key=lambda s: s.sellPrice, reverse=True)
-        buyPrices = sorted(comparePrices, key=lambda s: s.buyPrice)
+
+        sell_prices = sorted(filtered_pairs, key=lambda s: s.sell_price, reverse=True)
+        buy_prices = sorted(filtered_pairs, key=lambda s: s.buy_price)
             
-        buy = buyPrices[0]
-        sell = sellPrices[0]
+        buy = buy_prices[0]
+        sell = sell_prices[0]
         
         if buy.exchange == sell.exchange:
             return opportunities
-        if buy.buyPrice==0 or sell.sellPrice==0:
-            return opportunities
-        if buy.buyPrice*(1+buy.fee) >= sell.sellPrice*(1-sell.fee):
+
+        if buy.buy_price*(1+buy.fee) >= sell.sell_price*(1-sell.fee):
             return opportunities
 
         #An estimate profit
-        profit = ((sell.sellPrice-buy.buyPrice)/buy.buyPrice) * 100.0
+        profit = ((sell.sell_price-buy.buy_price)/buy.buy_price) * 100.0
 
         if profit < 0:
             return opportunities
@@ -164,120 +159,54 @@ class ScanRunner():
         #Find matching chain
         for cbName in buy.chains:
             cb = buy.chains[cbName]
-            cs = sell.getChain(cbName)
+            cs = sell.get_chain(cbName)
             if not cs:
                 continue
             #Same coin with same contract
-            if cb.contractAddress == cs.contractAddress:
+            if cb.contract_address == cs.contract_address:
                 #Withdraw on buy side and deposit on sell side are possible    
                 if cb.withdraw and cs.deposit:
 
                     #Calculate minimum amount of profit
-                    minAmount = self.calculateMinProfitAmount(buy.buyPrice, sell.sellPrice,cb.fee,buy.fee, sell.fee,1)
-                    if max(minAmount, cb.fee*buy.buyPrice) > self.maxAmount:
+                    min_amount = self.calculate_min_profit_amount(buy.buy_price, sell.sell_price,cb.fee,buy.fee, sell.fee,1)
+                    if max(min_amount, cb.fee*buy.buy_price) > self.maxAmount:
                         continue
+
+                    buy_exchange = self.exchangeMap[buy.exchange]
+                    sell_exchange = self.exchangeMap[sell.exchange]
                                             
                     #Get orderbook of coin on buy exchange
-                    buy_orders = await self.exchangeMap[buy.exchange].getOrders(buy.symbol)
+                    buy_orders: OrderBook = await buy_exchange.get_orders(buy.symbol)
                             
                     #Get all possibilities for buying
-                    buy_possibilities = self.calulateBuyPrices(buy_orders,max(minAmount, cb.fee*buy.buyPrice),sell.sellPrice,buy.fee, sell.fee, cb.fee)
+
+                    buy_possibilities = buy_orders.get_buy_possibilities(max(min_amount, cb.fee*buy.buy_price),
+                                                                         cb.fee,sell.sell_price,sell.fee,self.maxAmount)
+
                     if len(buy_possibilities) == 0:
                         continue
 
                     #Get orderbook of coin on sell exchange
-                    sell_orders = await self.exchangeMap[sell.exchange].getOrders(sell.symbol)
+                    sell_orders: OrderBook = await sell_exchange.get_orders(sell.symbol)
                             
-                    sell_ops = self.findBestSellPrice(buy_possibilities,sell_orders,sell.fee,1.0)
+                    sell_ops = sell_orders.get_sell_opportunities(buy_possibilities,1.0)
 
                     if len(sell_ops) == 0:
                         continue
 
-                    ag = ArbitrageGroup(buy.exchange, sell.exchange, pair, cb.name)
-                    ag.setOpportunities(sell_ops)
+                    ag = ArbitrageGroup(buy_exchange_name=buy_exchange.name, sell_exchange_name=sell_exchange.name,trading_pair=pair,
+                                        chain=cb.name, buy_exchange_id=buy_exchange.guid, sell_exchange_id=sell_exchange.guid)
+                    ag.set_opportunities(sell_ops)
                     opportunities.append(ag)
+                    self.db.add(ag.to_DBO())
+                    self.db.commit()
+
+
 
         return opportunities
     
-    def calculateMinProfitAmount(self, buyPrice, sellPrice, withdrawFee, buyFee, sellFee, profit):
-        first = withdrawFee * sellPrice * (1 - sellFee)
-        second = (1 - buyFee) * sellPrice * (1 - sellFee) / buyPrice - (1+(profit/100))
+    def calculate_min_profit_amount(self, buy_price, sell_price, withdraw_fee, buy_fee, sell_fee, profit):
+        first = withdraw_fee * sell_price * (1 - sell_fee)
+        second = (1 - buy_fee) * sell_price * (1 - sell_fee) / buy_price - (1+(profit/100))
         
         return first/second
-
-    def _calculateMinBuyAmount(self, sellPrice, withdrawFee, buyFee, buyPrice, amount, level, buyOrders ):
-
-        totalPrice = sum(buyOrders[i]["qty"] for i in range(level+1))
-        numerator = sellPrice * totalPrice * (1-buyFee) - amount - sellPrice * withdrawFee
-        denominator = (1+ (sellPrice*(1-buyFee)/buyPrice))
-
-        return numerator/denominator
-
-
-
-    def calulateBuyPrices(self, buyOrders, amount, sellPrice, buyFee, sellFee, withdrawFee):
-        possibilities = []
-        buyPrice = buyOrders["buy"][0]["price"]
-        sellPrice_with_fee = sellPrice * (1 - sellFee)
-        minAmount = amount
-        currentAmount = 0
-
-        #Buyprice already too high
-        if buyPrice*(1+buyFee)>=sellPrice_with_fee:
-            return possibilities
-
-        for i in range(len(buyOrders["buy"])):
-            order = buyOrders["buy"][i]
-            currentAmount += order["usdt_amount"]
-            currentAmount = min(currentAmount, self.maxAmount)
-            maxTotal, maxRate = self.getTotalPrice(buyOrders, currentAmount, "buy", buyFee)
-            maxRealTotal = maxTotal - withdrawFee
-            maxRealRate = currentAmount / maxRealTotal
-
-            if maxRealRate > sellPrice_with_fee:
-                continue
-
-            remove_amount = self._calculateMinBuyAmount(sellPrice_with_fee, withdrawFee,buyFee,order["price"],currentAmount,i, buyOrders["buy"])
-
-            if (remove_amount < 0) or (currentAmount-remove_amount < minAmount):
-                continue
-
-            minBuyAmount = currentAmount - remove_amount
-
-            minTotal, minRate = self.getTotalPrice(buyOrders, minBuyAmount, "buy", buyFee)
-            minRealTotal = minTotal - withdrawFee
-            minRealRate = minBuyAmount/ minRealTotal
-
-            if (minRealRate > sellPrice_with_fee):
-                continue
-
-            possibilities.append({
-                "minAmount": minBuyAmount,
-                "maxAmount": currentAmount,
-                "minRate": minRate,
-                "maxRate": maxRate,
-                "minRealTotal": minRealTotal,
-                "maxRealTotal": maxRealTotal,
-            })
-
-            if currentAmount == self.maxAmount:
-                return possibilities
-        return possibilities
-
-    def findBestSellPrice(self, buy_possibilities, orders, sell_fee, profit_percent):
-        opportunities = []
-
-        for pos in buy_possibilities:
-            minRealSellPrice, minRealSellRate = self.getTotalPrice(orders, pos["minRealTotal"], "sell", sell_fee)
-            maxRealSellPrice, maxRealSellRate = self.getTotalPrice(orders, pos["maxRealTotal"], "sell", sell_fee)
-
-            minProfit = minRealSellPrice - pos["minAmount"]
-            maxProfit = maxRealSellPrice - pos["maxAmount"]
-
-            if (minProfit > pos["minAmount"] * (profit_percent / 100)) and (
-                    maxProfit > pos["maxAmount"] * (profit_percent / 100)):
-                ao = ArbitrageOpportunity(pos["minAmount"], pos["maxAmount"], minRealSellPrice, maxRealSellPrice,
-                                          minProfit, maxProfit, pos["minRate"], minRealSellRate)
-                opportunities.append(ao)
-
-        return opportunities
