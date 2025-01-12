@@ -1,18 +1,20 @@
-from .BaseExchange import BaseExchange
+from typing import Optional
+
 from model.TradingPair import TradingPair, Chain
-from tqdm import tqdm
+from .BaseExchange import BaseExchange
+
 
 class MEXC(BaseExchange):
 
-    def __init__(self):
-        super().__init__("MEXC", "mxc", "mexc")
+    name: Optional[str] = "MEXC"
+    ccxt_id: Optional[str] = "mexc"
+    config_key: Optional[str] = "mxc"
 
-        self.exchange.apiKey = self.apiKey
-        self.exchange.secret = self.apiSecret
+    async def load_trading_pairs(self):
+        self.set_api()
         self.exchange.enableRateLimit = True
         self.exchange.rateLimit = 20
-    async def loadTradingPairs(self):
-        pairs = {}
+
         symbols = await self.exchange.fetch_markets()
         
         currencies = await self.exchange.fetch_currencies()
@@ -24,15 +26,15 @@ class MEXC(BaseExchange):
             if symbol["quote"] == "USDT" and symbol["info"]["status"]=="1":
                 if symbol["base"] not in currencies.keys():
                     continue      
-                curChains = currencies[symbol["base"]]["networks"]
-                pair = TradingPair(symbol["symbol"], self.configKey , fee=float(symbol["taker"]))
+                cur_chains = currencies[symbol["base"]]["networks"]
+                pair= TradingPair(symbol=symbol["symbol"], exchange=self.config_key, fee=float(symbol["taker"]))
                        
-                for key, c in curChains.items():
+                for key, c in cur_chains.items():
 
                     if c["withdraw"]:
-                        chain = Chain(key, float(c["fee"]), c["withdraw"], c["deposit"],c["info"]["contract"], float(c["limits"]["withdraw"]["min"]))
-                        pair.addChain(chain)
+                        chain = Chain(name=key, fee=float(c["fee"]), withdraw=c["withdraw"], deposit=c["deposit"],
+                                      contract_address=c["info"]["contract"], min_amount=float(c["limits"]["withdraw"]["min"]) )
 
-                pairs[pair.symbol] = pair
-        
-        self.tradingPairs = pairs
+                        pair.add_chain(chain)
+
+                self.trading_pairs[pair.symbol] = pair

@@ -1,16 +1,17 @@
-from .BaseExchange import BaseExchange
-import requests
+from typing import Optional
+
 from model.TradingPair import TradingPair, Chain
-from tqdm import tqdm
-import ccxt
+from .BaseExchange import BaseExchange
+
 
 class Bitget(BaseExchange):
 
-    def __init__(self):
-        super().__init__("Bitget", "btg", "bitget")
+    name: Optional[str] = "Bitget"
+    ccxt_id: Optional[str] = "bitget"
+    config_key: Optional[str] = "btg"
 
-    async def loadTradingPairs(self):
-        pairs = {}
+    async def load_trading_pairs(self):
+
         symbols = await self.exchange.fetch_markets()
 
         currencies = await self.exchange.fetch_currencies()
@@ -22,15 +23,15 @@ class Bitget(BaseExchange):
             if symbol["quote"] == "USDT" and symbol["info"]["status"]=="online":
                 if symbol["base"] not in currencies.keys():
                     continue      
-                curChains = currencies[symbol["base"]]["networks"]
-                pair = TradingPair(symbol["symbol"], self.configKey ,fee=float(symbol["taker"]))
+                cur_chains = currencies[symbol["base"]]["networks"]
+                pair = TradingPair(symbol=symbol["symbol"], exchange=self.config_key,fee=float(symbol["taker"]))
                        
-                for key, c in curChains.items():
+                for key, c in cur_chains.items():
 
                     if c["withdraw"]:
-                        chain = Chain(key, float(c["fee"]), c["withdraw"], c["deposit"],c["info"]["contractAddress"], float(c["limits"]["withdraw"]["min"]))
-                        pair.addChain(chain)
+                        chain = Chain(name=key, fee=float(c["fee"]), withdraw=c["withdraw"],
+                                      deposit=c["deposit"],contract_address=c["info"]["contractAddress"],
+                                      min_amount=float(c["limits"]["withdraw"]["min"]))
+                        pair.add_chain(chain)
 
-                pairs[pair.symbol] = pair
-        
-        self.tradingPairs = pairs
+                self.trading_pairs[pair.symbol] = pair
