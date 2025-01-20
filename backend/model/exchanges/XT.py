@@ -2,6 +2,8 @@ from typing import Optional
 
 from model.TradingPair import TradingPair, Chain
 from .BaseExchange import BaseExchange
+from ccxt.base.errors import ExchangeNotAvailable, ExchangeError
+import asyncio
 
 
 class XT(BaseExchange):
@@ -37,8 +39,12 @@ class XT(BaseExchange):
     
     async def load_prices(self):
 
-        prices = await self.exchange.fetch_bids_asks()
-
+        try:
+            prices = await self.exchange.fetch_bids_asks()
+        except ExchangeError as e:
+            print(e)
+            await asyncio.sleep(1)
+            return self.load_prices()
         for symbol,ticker in prices.items():
 
             if symbol[-4:].upper() == "USDT":
