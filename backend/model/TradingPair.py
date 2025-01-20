@@ -2,6 +2,9 @@ from typing import Dict, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
+ALLOWED_CHAINS = ["BTC","ERC20","XRP","ETH","LTC","DOGE","XLM","TRC20","BEP20","XMR","ADA","XTZ","SOL","BEP2","DOT",
+                  "AVAX","RUNE","NEAR","THETA","STX","ARBITRUM","MATIC","FTM"]
+
 class Chain(BaseModel):
 
     name: str
@@ -30,6 +33,9 @@ class Chain(BaseModel):
     def _convert_chain_name(cls,name: str) -> str:
         
         return name
+
+    def is_allowed_chain(self) -> bool:
+        return self.name in ALLOWED_CHAINS
 
 class TradingPair(BaseModel):
 
