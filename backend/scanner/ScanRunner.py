@@ -15,7 +15,12 @@ from database.model.Exchange import ExchangeDBO
 from model.ArbitrageModel import ArbitrageGroup
 from model.Orders import OrderBook
 from model.exchanges.Bitget import BaseExchange
+from model.TradingPair import Chain
 from scanner.util import run_periodic
+
+from ccxt.base.errors import ExchangeNotAvailable
+from scanner.util import DEBUG
+from model import ExchangeInfo
 
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 1500)
@@ -52,16 +57,23 @@ class ScanRunner:
         opportunities = [o for op in ops for o in op]
         
         time_end = datetime.now()
-        
-        if len(opportunities)>0:
-            df = pd.DataFrame([ao.to_dict() for ao in opportunities])
-            print(df.sort_values(by=["minProfit"], ascending=False))
-        print(f"Took {(time_end-time_start).total_seconds()} seconds")
+        total_time = (time_end - time_start).total_seconds()
+        if DEBUG:
+            if len(opportunities)>0:
+                df = pd.DataFrame([ao.to_dict() for ao in opportunities])
+                print(df.sort_values(by=["minProfit"], ascending=False))
+            print(f"Took {total_time} seconds")
+
+        ExchangeInfo.add_time(total_time)
+        ExchangeInfo.add_total_time(int(datetime.utcnow().timestamp()))
+
+
 
     async def start(self, exchange_list):
         await self.load_exchanges(exchange_list)
         
-        self.task = asyncio.create_task(run_periodic(1.0, self.check_arbitrage))
+        self.task = asyncio.create_task(run_periodic(self.interval, self.check_arbitrage))
+
         await self.task
 
     async def stop(self):
@@ -84,14 +96,20 @@ class ScanRunner:
             self.db.add(dbo)
         else:
             dbo.active = True
-        self.db.commit()
-        instance.guid = dbo.guid
 
         print(f"Load {instance.name} pairs")
-        await instance.load_trading_pairs()
-        print(f"Finished loading {instance.name} pairs")
-        self.exchanges.append(instance)
-        self.exchangeMap[instance.config_key] = instance
+        try:
+            await instance.load_trading_pairs()
+            self.exchanges.append(instance)
+            self.exchangeMap[instance.config_key] = instance
+            print(f"Finished loading {instance.name} pairs")
+        except ExchangeNotAvailable as e:
+            print(f"Couldt load {instance.name} pairs")
+            dbo.active = False
+            pass
+
+        self.db.commit()
+        instance.guid = dbo.guid
 
     async def load_exchanges(self, exchange_list):
         #Disable all exchanges
@@ -158,7 +176,9 @@ class ScanRunner:
 
         #Find matching chain
         for cbName in buy.chains:
-            cb = buy.chains[cbName]
+            cb: Chain = buy.chains[cbName]
+            if not cb.is_allowed_chain():
+                continue
             cs = sell.get_chain(cbName)
             if not cs:
                 continue
@@ -176,7 +196,11 @@ class ScanRunner:
                     sell_exchange = self.exchangeMap[sell.exchange]
                                             
                     #Get orderbook of coin on buy exchange
+
                     buy_orders: OrderBook = await buy_exchange.get_orders(buy.symbol)
+
+                    if not buy_orders:
+                        continue
                             
                     #Get all possibilities for buying
 
@@ -187,7 +211,11 @@ class ScanRunner:
                         continue
 
                     #Get orderbook of coin on sell exchange
+
                     sell_orders: OrderBook = await sell_exchange.get_orders(sell.symbol)
+
+                    if not sell_orders:
+                        continue
                             
                     sell_ops = sell_orders.get_sell_opportunities(buy_possibilities,1.0)
 
