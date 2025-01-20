@@ -1,27 +1,21 @@
-from sqlalchemy import Column, String
-from sqlalchemy.orm import validates
+from sqlalchemy.orm import Mapped, mapped_column, validates
+from typing import Optional
 from passlib.hash import pbkdf2_sha256
 
 
-from database.model.BaseModel import Base
+from database.model.BaseModel import BaseDBO
 import uuid
 
-class UserDBO(Base):
+class UserDBO(BaseDBO):
     __tablename__ = 'users'
 
-    name: str = Column('name', String)
-    salt: str| None = Column('salt', String)
-    pw_hash: str| None = Column('pw_hash', String)
-    guid: str  = Column('guid', String, primary_key=True)
+    name: Mapped[str] = mapped_column()
+    pw_hash: Mapped[Optional[str]] = mapped_column()
+    salt: Mapped[Optional[str]] = mapped_column()
 
     @validates("name")
-    def generate_uuid(self, key, value):
-        if not value:
-            raise ValueError("username cannot be empty.")
-
-        if not self.guid:
-            self.guid = str(uuid.uuid4())
-            self.salt = str(uuid.uuid4())
+    def generate_salt(self, key,value):
+        self.salt = str(uuid.uuid4())
         return value
 
     def set_password(self, password: str):

@@ -1,88 +1,98 @@
 import React, { useState } from 'react';
-import './LoginForm.scss';
-import { API_BASE_URL } from '../config/constants'; // Import the constant
+//import './LoginForm.scss';
+import {Field, Formik, useFormik} from "formik";
+import {
+    Box,
+    Button,
+    Flex,
+    FormControl, FormErrorMessage,
+    FormLabel,
+    Input,
+    VStack
+} from "@chakra-ui/react";
+import { useDispatch, useSelector } from "react-redux";
+import { loginUser, loginSelector, clearState } from '../store/slices/LoginSlice';
+import { useEffect } from "react";
+import { useNavigate } from "react-router"
 
 const LoginForm: React.FC = () => {
-    const [username, setUsername] = useState<string>('');
-    const [password, setPassword] = useState<string>('');
-    const [error, setError] = useState<string>('');
-    const [loading, setLoading] = useState<boolean>(false);
+    const dispatch = useDispatch();
+    const navigate = useNavigate();
 
-    const handleLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError('');
+    //const { register, errors, handleSubmit } = useForm();
+    const { isFetching, isSuccess, isError, errorMessage } = useSelector(loginSelector);
+    useEffect(() => {
+        return () => {
+            dispatch(clearState());
+        };
+    }, []);
 
-        if (!username || !password) {
-            setError('Please enter both username and password');
-            return;
+    useEffect(() => {
+        if (isError) {
+            console.log(errorMessage);
+            dispatch(clearState());
         }
 
-        setLoading(true);
-
-        try {
-            const formData = new FormData();
-            formData.append('username', username);
-            formData.append('password', password);
-
-            const response = await fetch(`${API_BASE_URL}/api/auth/login`, { // Use the constant
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok) {
-                const { message } = await response.json();
-                setError(message || 'Login failed. Please try again.');
-            } else {
-                const data = await response.json();
-                console.log('Login successful!', data);
-
-                // Handle successful login
-                alert('Login successful!');
-            }
-        } catch (err) {
-            setError('An error occurred. Please try again later.');
-            console.error('Login error:', err);
-        } finally {
-            setLoading(false);
+        if (isSuccess) {
+            dispatch(clearState());
+            navigate("/dashboard");
         }
-    };
+    }, [isError, isSuccess]);
 
     return (
-        <div className="login-container">
-            <form className="login-form" onSubmit={handleLogin}>
-                <h2>Login</h2>
-                {error && <p className="error">{error}</p>}
-                <div className="form-group">
-                    <label htmlFor="username">Username</label>
-                    <input
-                        type="text"
-                        id="username"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        placeholder="Enter your username"
-                        disabled={loading}
-                    />
-                </div>
-                <div className="form-group">
-                    <label htmlFor="password">Password</label>
-                    <input
-                        type="password"
-                        id="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Enter your password"
-                        disabled={loading}
-                    />
-                </div>
-                <button
-                    type="submit"
-                    className="login-button"
-                    disabled={loading}
+        <Flex bg="gray.100" align="center" justify="center" h="100vh">
+            <Box bg="white" p={6} rounded="md" w={64}>
+                <Formik
+                    initialValues={{
+                        username: "",
+                        password: ""
+                    }}
+                    onSubmit={(data) => {
+                        dispatch(loginUser(data))
+                    }}
                 >
-                    {loading ? 'Logging in...' : 'Login'}
-                </button>
-            </form>
-        </div>
+                    {({ handleSubmit, errors, touched }) => (
+                        <form onSubmit={handleSubmit}>
+                            <VStack spacing={4} align="flex-start">
+                                <FormControl>
+                                    <FormLabel htmlFor="username">Username</FormLabel>
+                                    <Field
+                                        as={Input}
+                                        id="username"
+                                        name="username"
+                                        type="input"
+                                        variant="filled"
+                                    />
+                                </FormControl>
+                                <FormControl isInvalid={!!errors.password && touched.password}>
+                                    <FormLabel htmlFor="password">Password</FormLabel>
+                                    <Field
+                                        as={Input}
+                                        id="password"
+                                        name="password"
+                                        type="password"
+                                        variant="filled"
+                                        validate={(value: string) => {
+                                            let error;
+
+                                            if (value.length < 4) {
+                                                error = "Password must contain at least 6 characters";
+                                            }
+
+                                            return error;
+                                        }}
+                                    />
+                                    <FormErrorMessage>{errors.password}</FormErrorMessage>
+                                </FormControl>
+                                <Button type="submit" colorScheme="purple" width="full">
+                                    Login
+                                </Button>
+                            </VStack>
+                        </form>
+                    )}
+                </Formik>
+            </Box>
+        </Flex>
     );
 };
 
