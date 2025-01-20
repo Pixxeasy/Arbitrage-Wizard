@@ -21,6 +21,9 @@ class ArbitrageOpportunity(BaseModel):
         dbo = ArbitrageOpportunityDBO(**self.model_dump())
         return dbo
 
+    class Config:
+        from_attributes = True
+
 class ArbitrageGroup(BaseModel):
 
     buy_exchange_name: str
