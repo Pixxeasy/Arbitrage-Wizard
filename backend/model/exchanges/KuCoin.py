@@ -1,7 +1,7 @@
 import asyncio
 from typing import Optional
 
-from ccxt.base.errors import ExchangeError, InvalidNonce
+from ccxt.base.errors import ExchangeError, InvalidNonce, RequestTimeout
 
 from model.TradingPair import TradingPair, Chain
 from .BaseExchange import BaseExchange
@@ -34,7 +34,7 @@ class KuCoin(BaseExchange):
                 for key, c in cur_chains.items():
 
                     if c["active"]:
-                        chain = Chain(name=key, fee=float(symbol["taker"]), withdraw=c["withdraw"], deposit=c["deposit"],
+                        chain = Chain(name=key, fee=float(c["fee"]), withdraw=c["withdraw"], deposit=c["deposit"],
                                       contract_address=c["info"]["contractAddress"], min_amount=float(c["limits"]["withdraw"]["min"]))
 
                         pair.add_chain(chain)
@@ -50,6 +50,9 @@ class KuCoin(BaseExchange):
             return await self.get_orders(symbol)
         except InvalidNonce as In:
             print(In)
+            await self.exchange.load_time_difference()
+            return await self.get_orders(symbol)
+        except RequestTimeout as rt:
             await self.exchange.load_time_difference()
             return await self.get_orders(symbol)
 
