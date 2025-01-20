@@ -14,9 +14,13 @@ def init_user_data(data_path,db: Session):
                 stmt = select(UserDBO).where(UserDBO.name==user_entry["name"])
 
                 user = db.scalars(stmt).first()
+
+                #User doesnt exist in database
                 if not user:
                     user_dbo = UserDBO(name=user_entry["name"])
                     user_dbo.set_password(user_entry["password"])
                     db.add(user_dbo)
+                else:
+                    user.set_password(user_entry["password"])
 
             db.commit()
