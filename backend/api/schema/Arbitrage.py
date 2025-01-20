@@ -1,5 +1,17 @@
-from pydantic import BaseModel
+from typing import List, Optional
 
-class ArbitrageResponse(BaseModel):
+from pydantic import BaseModel, Field
 
-    pair: str
+from model.ArbitrageModel import ArbitrageOpportunity
+
+
+class ArbitrageGroupResponse(BaseModel):
+
+    trading_pair: str
+    chain_name: str = Field(alias="chain")
+    buy_exchange_name: Optional[str] = Field(None)
+    sell_exchange_name: Optional[str] = Field(None)
+    opportunities: List[ArbitrageOpportunity]
+
+    class Config:
+        from_attributes = True
