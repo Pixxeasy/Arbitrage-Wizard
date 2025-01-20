@@ -1,11 +1,11 @@
-import './App.css';
-import LoginForm from './components/LoginForm';
+import {BrowserRouter} from "react-router";
+import Router from "./Router.tsx";
 
 function App() {
     return (
-        <div className="App">
-            <LoginForm />
-        </div>
+        <BrowserRouter>
+            <Router />
+        </BrowserRouter>
     );
 }
 
