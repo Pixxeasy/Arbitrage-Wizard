@@ -1,5 +1,7 @@
 import asyncio
 
+DEBUG = False
+
 async def run_periodic(interval_sec, coro_name, *args, **kwargs):
 
     while True:
