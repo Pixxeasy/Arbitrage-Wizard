@@ -4,7 +4,7 @@ import uuid
 from typing import Dict, Any, Self, Optional
 
 import ccxt.async_support as ccxt
-from ccxt.base.errors import ExchangeError, ExchangeNotAvailable
+from ccxt.base.errors import ExchangeError, ExchangeNotAvailable, RequestTimeout
 from pydantic import BaseModel, Field, model_validator
 
 from model.Orders import Order, OrderBook
@@ -62,22 +62,30 @@ class BaseExchange(BaseModel):
     async def get_orders(self, symbol) -> OrderBook:
         try:
             orderbook = await self.exchange.fetch_order_book(symbol)
+        except RequestTimeout:
+            print("Request timed out")
+            await asyncio.sleep(1)
+            return await self.get_orders(symbol)
         except ExchangeError as e:
             print(e.args)
             await asyncio.sleep(1)
-            return await self.getOrders(symbol)
-        except ExchangeNotAvailable:
+            return await self.get_orders(symbol)
+        except ExchangeNotAvailable as e:
+            print(e)
             return None
 
         maker_fee = self.trading_pairs[symbol].fee
 
         book = OrderBook(buy_fee=maker_fee, sell_fee=maker_fee)
-
         for ask in orderbook["asks"]:
+            if (ask[0] <= 0) or (ask[1] <= 0):
+                continue
             o = Order(price=float(ask[0]), quantity=float(ask[1]))
             book.buy_orders.append(o)
 
         for bid in orderbook["bids"]:
+            if (bid[0] <= 0) or (bid[1] <= 0):
+                continue
             o = Order(price=float(bid[0]), quantity=float(bid[1]))
             book.sell_orders.append(o)
 
