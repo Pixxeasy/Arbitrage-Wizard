@@ -1,5 +1,10 @@
 import {protectedBaseApi} from "./base.ts";
-import {ArbitrageGroup, CurrentArbitrageResponse, ArbitrageGroupResponse} from "../../types/Arbitrage.ts";
+import {
+    ArbitrageGroup,
+    CurrentArbitrageResponse,
+    ArbitrageGroupResponse,
+    HistoricArbitrage, HistoricArbitrageResponse
+} from "../../types/Arbitrage.ts";
 
 export const arbitrageApi = protectedBaseApi.injectEndpoints({
     endpoints: (build) => ({
@@ -34,15 +39,36 @@ export const arbitrageApi = protectedBaseApi.injectEndpoints({
                         })
                     }
                 })
-                const utcDate = new Date(response.last_update);
-                const timezoneOffset = utcDate.getTimezoneOffset() * 60;
-                const localTimestamp = response.last_update - timezoneOffset;
 
-                return {lastUpdate: localTimestamp, arbitrages: groups, clientTime: Date.now()};
+                return {lastUpdate: response.last_update*1000, arbitrages: groups, clientTime: Date.now()};
             }
         }),
+        historicArbitrages: build.query({
+            query: () => "/arbitrage/history",
+            transformResponse(response: HistoricArbitrageResponse[]): HistoricArbitrage[] {
+                if (response?.detail) {
+                    throw new Error(response.detail);
+                }
+
+                const history: HistoricArbitrage[] = response.map((item: HistoricArbitrageResponse) => {
+                    return {
+                        "buyExchange": item.buy_exchange_name,
+                        "sellExchange": item.sell_exchange_name,
+                        "tradingPair": item.trading_pair,
+                        "start": item.series_start*1000,
+                        "end": item.series_end*1000,
+                        "runs": item.num_runs,
+                        "runTime": item.series_end - item.series_start
+                    }
+                })
+
+                history.sort((a,b) => b.start - a.start)
+
+                return history
+            }
+        })
     }),
     overrideExisting: false,
 })
 
-export const { useCurrentArbitragesQuery } = arbitrageApi
+export const { useCurrentArbitragesQuery, useHistoricArbitragesQuery} = arbitrageApi
