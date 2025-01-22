@@ -13,8 +13,7 @@ router = APIRouter(
 
 @router.get("/current")
 async def get_current_arbitrages(user: UserDep,db: DBSessionDep):
-    user_config = {"max_amount": 100}
 
-    dbos,ts = get_current_arbitrage_by_user_config(user_config,db)
+    dbos,ts = get_current_arbitrage_by_user_config(user,db)
 
     return {"last_update": ts, "arbitrages": dbos}
