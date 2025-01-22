@@ -79,13 +79,10 @@ class ScanRunner:
     async def stop(self):
         for ex in self.exchanges:
             await ex.exchange.close()
-        self.task.cancel()
-        self.db.close()
 
-        try:
-            await self.task
-        except asyncio.CancelledError:
-            pass
+        if self.task:
+            self.task.cancel()
+        self.db.close()
         
     async def _load_exchange(self, ex_class):
         instance = ex_class()
@@ -223,7 +220,7 @@ class ScanRunner:
                         continue
 
                     ag = ArbitrageGroup(buy_exchange_name=buy_exchange.name, sell_exchange_name=sell_exchange.name,trading_pair=pair,
-                                        chain=cb.name, buy_exchange_id=buy_exchange.guid, sell_exchange_id=sell_exchange.guid)
+                                        chain=cb.name, buy_exchange_key=buy_exchange.config_key, sell_exchange_key=sell_exchange.config_key)
                     ag.set_opportunities(sell_ops)
                     opportunities.append(ag)
                     self.db.add(ag.to_DBO())
