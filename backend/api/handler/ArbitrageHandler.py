@@ -3,10 +3,10 @@ from typing import List
 from Demos.win32ts_logoff_disconnected import session
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, case, literal_column
 from sqlalchemy.orm import aliased, joinedload, with_loader_criteria
 
-from api.schema.Arbitrage import ArbitrageGroupResponse
+from api.schema.Arbitrage import ArbitrageGroupResponse, HistoricArbitrage
 from database.model.ArbitrageOpportunity import ArbitrageGroupDBO, ArbitrageOpportunityDBO
 from database.model.Exchange import ExchangeDBO
 from database.model.User import UserDBO
@@ -88,4 +88,81 @@ def get_current_arbitrage_by_user_config(user: UserDBO, db: Session, count: int 
 
     return opportunities, int(current_time)
 
+def get_historic_arbitrages(db: Session, limit: int = 100):
 
+    split_time = 120
+    history = []
+    time_diff_cte = (
+        select(
+            ArbitrageGroupDBO.guid,
+            ArbitrageGroupDBO.created_at,
+            ArbitrageGroupDBO.sell_exchange_key,
+            ArbitrageGroupDBO.buy_exchange_key,
+            ArbitrageGroupDBO.trading_pair,
+            (ArbitrageGroupDBO.created_at - func.lag(ArbitrageGroupDBO.created_at)
+             .over(partition_by=ArbitrageGroupDBO.trading_pair, order_by=ArbitrageGroupDBO.created_at)).label('time_diff')
+        )
+        .cte("TimeDiff")
+    )
+
+    # Step 2: Define the Series CTE
+    series_cte = (
+        select(
+            time_diff_cte.c.guid,
+            time_diff_cte.c.created_at,
+            time_diff_cte.c.sell_exchange_key,
+            time_diff_cte.c.buy_exchange_key,
+            time_diff_cte.c.trading_pair,
+            func.sum(
+                case(
+                    (time_diff_cte.c.time_diff > literal_column(str(split_time)), 1),
+                    else_=0
+                )
+            )
+            .over(partition_by=time_diff_cte.c.trading_pair, order_by=time_diff_cte.c.created_at)
+            .label('series_id')
+        )
+        .cte("Series")
+    )
+
+    # Step 3: Final query
+    query = (
+        select(
+            series_cte.c.series_id,
+            series_cte.c.trading_pair,
+            func.min(series_cte.c.created_at).label('series_start'),
+            func.max(series_cte.c.created_at).label('series_end'),
+            func.count().label('num_runs'),
+            series_cte.c.sell_exchange_key,
+            series_cte.c.buy_exchange_key
+        )
+        .group_by(series_cte.c.series_id, series_cte.c.trading_pair, series_cte.c.sell_exchange_key)
+        .having(func.count() > 1)
+        .order_by(func.min(series_cte.c.created_at))
+        .limit(limit)
+    )
+
+    results = db.execute(query).fetchall()
+    arbitrage_dbos: List[HistoricArbitrage] = [
+        HistoricArbitrage(
+            trading_pair=row.trading_pair,
+            series_start=int(row.series_start),
+            series_end=int(row.series_end),
+            num_runs=row.num_runs,
+            sell_exchange_key=row.sell_exchange_key,
+            buy_exchange_key=row.buy_exchange_key
+        )
+        for row in results
+    ]
+    for arbitrage_dbo in arbitrage_dbos:
+
+
+        buy_exchange = db.scalars(select(ExchangeDBO).where(ExchangeDBO.config_key == arbitrage_dbo.buy_exchange_key)).first()
+        sell_exchange = db.scalars(select(ExchangeDBO).where(ExchangeDBO.config_key == arbitrage_dbo.sell_exchange_key)).first()
+
+
+        arbitrage_dbo.buy_exchange_name = buy_exchange.name
+        arbitrage_dbo.sell_exchange_name = sell_exchange.name
+        history.append(arbitrage_dbo)
+
+    return history
