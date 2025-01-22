@@ -9,12 +9,13 @@ from sqlalchemy.orm import aliased, joinedload, with_loader_criteria
 from api.schema.Arbitrage import ArbitrageGroupResponse
 from database.model.ArbitrageOpportunity import ArbitrageGroupDBO, ArbitrageOpportunityDBO
 from database.model.Exchange import ExchangeDBO
+from database.model.User import UserDBO
+from database.model.UserConfig import UserConfigDBO
 from model.ArbitrageModel import ArbitrageOpportunity
 from model import ExchangeInfo
 
 
-def get_current_arbitrage_by_user_config(user_config, db: Session, count: int = 5):
-    max_amount = user_config['max_amount']
+def get_current_arbitrage_by_user_config(user: UserDBO, db: Session, count: int = 3):
     earliest_ts = ExchangeInfo.get_last_total_time(count+1)
     current_time = ExchangeInfo.get_last_total_time(1)
     if not earliest_ts:
@@ -34,6 +35,7 @@ def get_current_arbitrage_by_user_config(user_config, db: Session, count: int = 
         partition_by=ArbitrageGroupDBO.trading_pair  # PARTITION BY name
     ).label("occurrence_count")
 
+    user_config_alias = aliased(UserConfigDBO)
     # Subquery with the window functions
     subquery = (
         select(
@@ -41,9 +43,12 @@ def get_current_arbitrage_by_user_config(user_config, db: Session, count: int = 
             ArbitrageGroupDBO.trading_pair,
             ArbitrageGroupDBO.created_at,
             row_number_column,
-            occurrence_count_column
+            occurrence_count_column,
+            user_config_alias.max_amount
         )
-        .where(ArbitrageGroupDBO.created_at > earliest_ts)  # Filter by timestamp
+        .join(user_config_alias, user_config_alias.exchange_key == ArbitrageGroupDBO.buy_exchange_key)  # Join user_config
+        .where(ArbitrageGroupDBO.created_at > earliest_ts,
+               user_config_alias.user_id == user.guid)  # Filter by timestamp
         .subquery()
     )
 
@@ -58,7 +63,7 @@ def get_current_arbitrage_by_user_config(user_config, db: Session, count: int = 
             joinedload(ArbitrageGroupDBO.opportunities), # Eagerly load opportunities
             with_loader_criteria(
                 ArbitrageOpportunityDBO,
-                ArbitrageOpportunityDBO.min_usdt_start <= max_amount
+                ArbitrageOpportunityDBO.min_usdt_start <= subquery.c.max_amount
             )
         )
         .where(
@@ -73,8 +78,8 @@ def get_current_arbitrage_by_user_config(user_config, db: Session, count: int = 
     for arbitrage_dbo in arbitrage_dbos:
         if len(arbitrage_dbo.opportunities) == 0:
             continue
-        buy_exchange = db.get(ExchangeDBO,arbitrage_dbo.buy_exchange_id)
-        sell_exchange = db.get(ExchangeDBO, arbitrage_dbo.sell_exchange_id)
+        buy_exchange = db.scalars(select(ExchangeDBO).where(ExchangeDBO.config_key == arbitrage_dbo.buy_exchange_key)).first()
+        sell_exchange = db.scalars(select(ExchangeDBO).where(ExchangeDBO.config_key == arbitrage_dbo.sell_exchange_key)).first()
 
         arbitrage_group_response = ArbitrageGroupResponse.model_validate(arbitrage_dbo)
         arbitrage_group_response.buy_exchange_name = buy_exchange.name
