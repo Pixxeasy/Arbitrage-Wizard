@@ -41,3 +41,22 @@ export interface ArbitrageOpportunityResponse {
     buy_price: number;
     sell_price: number;
 }
+
+export interface HistoricArbitrageResponse {
+    buy_exchange_name: string,
+    sell_exchange_name: string,
+    trading_pair: string,
+    series_start: number,
+    series_end: number,
+    num_runs: number,
+}
+
+export interface HistoricArbitrage {
+    buyExchange: string,
+    sellExchange: string,
+    tradingPair: string,
+    start: number,
+    end: number,
+    runs: number,
+    runTime: number,
+}

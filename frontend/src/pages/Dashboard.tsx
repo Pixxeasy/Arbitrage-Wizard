@@ -1,6 +1,7 @@
 import { Box, Heading,  Tabs, TabList, TabPanels, Tab, TabPanel } from "@chakra-ui/react";
 import ArbitrageList  from "../components/CurrentArbitrages"
 import ConfigList from "../components/ConfigSettings"
+import ArbitrageHistoryList from "../components/HistoricArbitrages.tsx";
 
 function Dashboard() {
     return (
@@ -17,7 +18,7 @@ function Dashboard() {
                         <ArbitrageList />
                     </TabPanel>
                     <TabPanel>
-                        <p>two!</p>
+                        <ArbitrageHistoryList />
                     </TabPanel>
                     <TabPanel>
                         <ConfigList />

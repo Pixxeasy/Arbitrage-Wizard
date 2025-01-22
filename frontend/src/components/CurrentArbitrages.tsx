@@ -84,7 +84,7 @@ function ArbitrageList() {
             <Box justifyContent={"right"}><Text>
                 Last Client Update: {isSuccess && moment(data.clientTime).format("HH:mm:ss")}
             </Text>
-            <Text>Last Server Update: { isSuccess && moment(data.lastUpdate*1000).format("HH:mm:ss")}</Text></Box>
+            <Text>Last Server Update: { isSuccess && moment.utc(data.lastUpdate+3600000).local().format("HH:mm:ss")}</Text></Box>
             {
                 (isLoading && !data ) && <Stack>
                     <Skeleton height='20px' />

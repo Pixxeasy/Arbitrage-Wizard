@@ -15,3 +15,13 @@ class ArbitrageGroupResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class HistoricArbitrage(BaseModel):
+    trading_pair: str
+    series_start: int
+    series_end: int
+    num_runs: int
+    sell_exchange_key: str
+    buy_exchange_key: str
+    buy_exchange_name: Optional[str] = None
+    sell_exchange_name: Optional[str] = None
