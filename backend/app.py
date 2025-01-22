@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from api.router.auth import router as auth_router
 from api.router.arbitrage import router as arbitrage_router
+from api.router.exchange import router as exchange_router
 from database.DBConnector import connect
 from database.data_loader import init_user_data
 from scanner.ScanRunner import ScanRunner
@@ -29,13 +30,13 @@ async def lifespan(app: FastAPI):
         init_user_data("initData", db)
         thread = threading.Thread(target=asyncio.run, args=(runner.start(config["exchanges"]),))
         thread.start()
-        #await runner.start(config["exchanges"])
     yield
     await runner.stop()
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(auth_router)
 app.include_router(arbitrage_router)
+app.include_router(exchange_router)
 
 @app.exception_handler(RequestValidationError)
 async def validate_exception_handler():

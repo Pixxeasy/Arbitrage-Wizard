@@ -1,7 +1,15 @@
-import { Navigate, Outlet } from "react-router";
+import {Navigate, Outlet, useLocation} from "react-router";
+import {useAuth} from "./util/useAuth"
 
 const ProtectedRoute = () => {
-    return sessionStorage.getItem("token") ? <Outlet /> : <Navigate to={"/"} replace />;
+    const auth = useAuth()
+    const location = useLocation()
+
+    return auth.token ? (
+        <Outlet />
+    ) : (
+        <Navigate to="/" state={{ from: location }} />
+    )
 };
 
 export default ProtectedRoute;

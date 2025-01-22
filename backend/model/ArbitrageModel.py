@@ -28,8 +28,8 @@ class ArbitrageGroup(BaseModel):
 
     buy_exchange_name: str
     sell_exchange_name: str
-    buy_exchange_id: str
-    sell_exchange_id: str
+    buy_exchange_key: str
+    sell_exchange_key: str
     trading_pair: str
     chain: str
     opportunities: List[ArbitrageOpportunity] = Field(default=[])
@@ -60,7 +60,7 @@ class ArbitrageGroup(BaseModel):
         }
 
     def to_DBO(self):
-        dbo = ArbitrageGroupDBO(buy_exchange_id=self.buy_exchange_id, sell_exchange_id=self.sell_exchange_id,
+        dbo = ArbitrageGroupDBO(buy_exchange_key=self.buy_exchange_key, sell_exchange_key=self.sell_exchange_key,
                                 trading_pair=self.trading_pair, chain=self.chain)
         for op in self.opportunities:
             dbo.opportunities.append(op.to_DBO())

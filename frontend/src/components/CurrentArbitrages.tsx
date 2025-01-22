@@ -17,9 +17,8 @@ import {ArbitrageGroup, ArbitrageOpportunity} from "../types/Arbitrage"
 import React, {useState, useEffect} from "react";
 import { motion } from "framer-motion";
 import {ChevronLeftIcon, ArrowForwardIcon} from "@chakra-ui/icons";
-import {useDispatch, useSelector} from "react-redux";
-import {arbitrageSelector, clearState, getArbitrage} from "../store/slices/ArbitrageSlice.tsx";
 import moment from "moment";
+import {useCurrentArbitragesQuery} from "../store/services/arbitrage.ts";
 
 const ArbitrageOpportunityItem: React.FC<{opportunity: ArbitrageOpportunity}> = ({opportunity}) => (
     <HStack align="center">
@@ -71,40 +70,10 @@ const ArbitrageGroupItem: React.FC<{group: ArbitrageGroup}> = ({group}) => {
 }
 
 function ArbitrageList() {
-    const [lastFetch, setLastFetch] = useState(Date.now())
 
-
-    const dispatch = useDispatch();
-    const { arbitrageGroups, lastUpdate , isFetching, isSuccess, isError, errorMessage } = useSelector(arbitrageSelector);
-
-    useEffect(() => {
-        dispatch(getArbitrage())
-        const interval = setInterval(() => {
-            dispatch(getArbitrage())
-        }, 1000*30);
-
-        return () => clearInterval(interval);
-    }, []);
-
-
-    useEffect(() => {
-        return () => {
-            dispatch(clearState());
-        };
-    }, []);
-
-    useEffect(() => {
-        if (isError) {
-            console.log(errorMessage);
-            dispatch(clearState());
-        }
-
-        if (isSuccess) {
-            dispatch(clearState());
-            setLastFetch(Date.now())
-
-        }
-    }, [isError, isSuccess]);
+    const {data, isLoading, isError, isSuccess, error} = useCurrentArbitragesQuery({}, {
+        pollingInterval: 30*1000,
+        skipPollingIfUnfocused: true,})
 
     return (
         <VStack
@@ -113,18 +82,18 @@ function ArbitrageList() {
             align='stretch'
         >
             <Box justifyContent={"right"}><Text>
-                Last Client Update: {moment(lastFetch).format("HH:mm:ss")}
+                Last Client Update: {isSuccess && moment(data.clientTime).format("HH:mm:ss")}
             </Text>
-            <Text>Last Server Update: {moment(lastUpdate*1000).format("HH:mm:ss")}</Text></Box>
+            <Text>Last Server Update: { isSuccess && moment(data.lastUpdate*1000).format("HH:mm:ss")}</Text></Box>
             {
-                isFetching && <Stack>
+                (isLoading && !data ) && <Stack>
                     <Skeleton height='20px' />
                     <Skeleton height='20px' />
                     <Skeleton height='20px' />
                 </Stack>
             }
             {
-                arbitrageGroups.length == 0 &&
+                (isSuccess && data.arbitrages.length== 0) &&
                 <Alert status='info'>
                     <AlertIcon />
                     <AlertTitle>No Arbitrages found :(</AlertTitle>
@@ -136,15 +105,14 @@ function ArbitrageList() {
                 <Alert status='error'>
                     <AlertIcon />
                     <AlertTitle>Error fetching data</AlertTitle>
-                    <AlertDescription>{errorMessage}</AlertDescription>
+                    <AlertDescription>{error.message}</AlertDescription>
                 </Alert>
             }
             {
-                arbitrageGroups.map((g,index) => (<ArbitrageGroupItem group={g} key={index} />))
+              isSuccess &&  data.arbitrages.map((g,index) => (<ArbitrageGroupItem group={g} key={index} />))
             }
         </VStack>
     )
-
 }
 
 export default ArbitrageList;
