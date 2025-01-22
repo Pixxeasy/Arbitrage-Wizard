@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-//import './LoginForm.scss';
 import {Field, Formik, useFormik} from "formik";
 import {
     Box,
@@ -7,37 +6,29 @@ import {
     Flex,
     FormControl, FormErrorMessage,
     FormLabel,
-    Input,
+    Input, useToast,
     VStack
 } from "@chakra-ui/react";
-import { useDispatch, useSelector } from "react-redux";
-import { loginUser, loginSelector, clearState } from '../store/slices/LoginSlice';
+import { useDispatch } from "react-redux";
 import { useEffect } from "react";
 import { useNavigate } from "react-router"
+import {useLoginMutation} from "../store/services/auth"
+import {setCredentials} from "../store/slices/authSlice.ts";
+
 
 const LoginForm: React.FC = () => {
     const dispatch = useDispatch();
     const navigate = useNavigate();
+    const toast = useToast()
 
     //const { register, errors, handleSubmit } = useForm();
-    const { isFetching, isSuccess, isError, errorMessage } = useSelector(loginSelector);
-    useEffect(() => {
-        return () => {
-            dispatch(clearState());
-        };
-    }, []);
+    const [login, {isLoading, isError, error}] = useLoginMutation();
 
     useEffect(() => {
         if (isError) {
-            console.log(errorMessage);
-            dispatch(clearState());
+            console.log(error);
         }
-
-        if (isSuccess) {
-            dispatch(clearState());
-            navigate("/dashboard");
-        }
-    }, [isError, isSuccess]);
+    }, [isError]);
 
     return (
         <Flex bg="gray.100" align="center" justify="center" h="100vh">
@@ -47,9 +38,23 @@ const LoginForm: React.FC = () => {
                         username: "",
                         password: ""
                     }}
-                    onSubmit={(data) => {
-                        dispatch(loginUser(data))
-                    }}
+                    onSubmit={async (data) => {
+                        try {
+                            const token = await login(data).unwrap()
+                            console.log(token)
+                            dispatch(setCredentials({token: token.access_token}))
+                            navigate('/dashboard')
+                        } catch (err) {
+                            toast({
+                                status: 'error',
+                                title: 'Error',
+                                description: err.message,
+                                isClosable: true,
+                            })
+
+                        }
+                    }
+                    }
                 >
                     {({ handleSubmit, errors, touched }) => (
                         <form onSubmit={handleSubmit}>
@@ -84,7 +89,7 @@ const LoginForm: React.FC = () => {
                                     />
                                     <FormErrorMessage>{errors.password}</FormErrorMessage>
                                 </FormControl>
-                                <Button type="submit" colorScheme="purple" width="full">
+                                <Button type="submit" colorScheme="purple" width="full" isLoading={isLoading}>
                                     Login
                                 </Button>
                             </VStack>
