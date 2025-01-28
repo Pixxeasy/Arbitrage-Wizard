@@ -14,6 +14,10 @@ from scanner.ScanRunner import ScanRunner
 from scanner import util
 import threading
 import asyncio
+import sys
+
+if sys.platform == 'win32':
+	asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
 @asynccontextmanager
