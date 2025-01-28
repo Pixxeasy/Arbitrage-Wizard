@@ -37,6 +37,9 @@ class Chain(BaseModel):
     def is_allowed_chain(self) -> bool:
         return self.name in ALLOWED_CHAINS
 
+    def has_contract_address(self):
+        return self.contract_address is not None
+
 class TradingPair(BaseModel):
 
     symbol: str
