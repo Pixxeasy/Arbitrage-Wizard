@@ -1,8 +1,15 @@
-from typing import Optional
+from datetime import datetime
+from typing import Optional, Any
 
-from model.TradingPair import TradingPair, Chain
+from asyncio import Semaphore
+
 from .BaseExchange import BaseExchange
+from ccxt import RequestTimeout, ExchangeError
 
+from ..Orders import OrderBook
+
+import asyncio
+import json
 
 class MEXC(BaseExchange):
 
@@ -10,31 +17,51 @@ class MEXC(BaseExchange):
     ccxt_id: Optional[str] = "mexc"
     config_key: Optional[str] = "mxc"
 
+    sem: Optional[Any] = Semaphore(3)
+    last_price_fetch: Optional[float] = None
+
     async def load_trading_pairs(self):
-        self.set_api()
-        self.exchange.enableRateLimit = True
-        self.exchange.rateLimit = 20
+        await self.load_trading_pairs_base(info_active={"key": "status", "value": "1"}, contract_address=["info", "contract"])
 
-        symbols = await self.exchange.fetch_markets()
-        
-        currencies = await self.exchange.fetch_currencies()
+    async def load_prices(self):
+        if self.last_price_fetch and ((int(datetime.now().timestamp()) - self.last_price_fetch) < 50):
+            print("price fetch time exceeded")
+            return
 
-        for symbol in symbols:
-            if symbol["type"] != "spot":
-                continue
+        if not self.exchange.has['fetchTickers']:
+            print("Exchange " + self.name + " does not support ticker")
+            return
 
-            if symbol["quote"] == "USDT" and symbol["info"]["status"]=="1":
-                if symbol["base"] not in currencies.keys():
-                    continue      
-                cur_chains = currencies[symbol["base"]]["networks"]
-                pair= TradingPair(symbol=symbol["symbol"], exchange=self.config_key, fee=float(symbol["taker"]))
-                       
-                for key, c in cur_chains.items():
+        try:
+            prices = await self.exchange.fetch_tickers()
+            self.last_price_fetch = int(datetime.now().timestamp())
+        except RequestTimeout:
+            return await self.load_prices()
 
-                    if c["withdraw"]:
-                        chain = Chain(name=key, fee=float(c["fee"]), withdraw=c["withdraw"], deposit=c["deposit"],
-                                      contract_address=c["info"]["contract"], min_amount=float(c["limits"]["withdraw"]["min"]) )
+        self.add_prices(prices)
+        return
 
-                        pair.add_chain(chain)
+    async def get_orders(self, symbol) -> OrderBook:
+        try:
+            async with self.sem:
+                orderbook = await self.exchange.fetch_order_book(symbol)
 
-                self.trading_pairs[pair.symbol] = pair
+        except ExchangeError:
+            resp_http = self.exchange.last_http_response
+
+            resp_json = json.loads(resp_http)
+            if int(resp_json["code"]) == 429:
+                print(f"{self.name} Too many requests")
+                headers = self.exchange.last_response_headers
+                if "Retry-After" in headers.keys():
+                    seconds = headers["Retry-After"]
+                    await asyncio.sleep(int(seconds))
+                await asyncio.sleep(5)
+
+            return await self.get_orders(symbol)
+        except RequestTimeout:
+            await self.exchange.load_time_difference()
+            await asyncio.sleep(1)
+            return await self.get_orders(symbol)
+
+        return self.create_order_book(symbol, orderbook)
