@@ -1,6 +1,6 @@
 {
     "search_interval": 10,
     "db_name": "data.db",
-    "exchanges": ["Bitget", "XT", "KuCoin", "MEXC"],
+    "exchanges": ["Bitget", "XT", "KuCoin", "MEXC", "BingX", "Bybit", "HTX", "Poloniex", "BitMart", "Okx"],
     "debug": false
 }
