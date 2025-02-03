@@ -4,3 +4,4 @@ conf/data.db
 .env
 .vscode
 .idea
+initData

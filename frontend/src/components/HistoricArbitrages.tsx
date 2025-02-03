@@ -1,10 +1,10 @@
 import {
-    Alert, AlertDescription,
-    AlertIcon, AlertTitle,
-    Box,
+    Alert,
+    AlertDescription,
+    AlertIcon,
+    AlertTitle,
     Card,
     CardBody,
-    Button,
     HStack,
     Icon,
     Skeleton,
@@ -13,12 +13,11 @@ import {
     Text,
     VStack
 } from "@chakra-ui/react";
-import {ArbitrageGroup, ArbitrageOpportunity, HistoricArbitrage} from "../types/Arbitrage"
-import React, {useState, useEffect} from "react";
-import { motion } from "framer-motion";
-import {ChevronLeftIcon, ArrowForwardIcon} from "@chakra-ui/icons";
+import {HistoricArbitrage} from "../types/Arbitrage"
+import React from "react";
+import {ArrowForwardIcon} from "@chakra-ui/icons";
 import moment from "moment";
-import {useCurrentArbitragesQuery, useHistoricArbitragesQuery} from "../store/services/arbitrage.ts";
+import {useHistoricArbitragesQuery} from "../store/services/arbitrage.ts";
 
 const HistoricArbitrageItem: React.FC<{hist: HistoricArbitrage}> = ({hist}) => {
 
@@ -76,7 +75,7 @@ function ArbitrageHistoryList() {
                 <Alert status='error'>
                     <AlertIcon />
                     <AlertTitle>Error fetching data</AlertTitle>
-                    <AlertDescription>{error.message}</AlertDescription>
+                    <AlertDescription>{error.error}</AlertDescription>
                 </Alert>
             }
             {

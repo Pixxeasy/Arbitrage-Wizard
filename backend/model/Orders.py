@@ -59,6 +59,9 @@ class OrderBook(BaseModel):
 
     def get_buy_possibilities(self, usdt_amount: float, withdraw_fee:float, sell_price:float, sell_fee:float, max_amount:float) -> List[Possibility]:
         possibilities = []
+        if len(self.sell_orders) == 0:
+            return possibilities
+
         buy_price = self.buy_orders[0].price
         sell_price_with_fee = sell_price * (1 - sell_fee)
         min_amount = usdt_amount
@@ -85,6 +88,8 @@ class OrderBook(BaseModel):
             min_buy_amount = current_amount - remove_amount
 
             min_result = self.get_total_buy_price(min_buy_amount).include_withdraw_fee(withdraw_fee)
+            if ((min_result.rate) < 0 or (min_result.coin_amount) < 0):
+                continue
 
             if (min_result.rate > sell_price_with_fee):
                 continue
@@ -101,6 +106,8 @@ class OrderBook(BaseModel):
 
     def get_sell_opportunities(self, buy_possibilities: List[Possibility], profit_percent: float) -> List[ArbitrageOpportunity ]:
         opportunities = []
+        if len(self.sell_orders) == 0:
+            return opportunities
 
         for pos in buy_possibilities:
             min_result = self.get_total_sell_price(pos.min_coin_amount)

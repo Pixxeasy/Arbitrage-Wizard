@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Mapped, mapped_column, validates, relationship
 from typing import Optional, List
 from passlib.hash import pbkdf2_sha256
+from sqlalchemy import String
 
 
 from database.model.BaseModel import BaseDBO
@@ -12,9 +13,9 @@ from database.model.UserConfig import UserConfigDBO
 class UserDBO(BaseDBO):
     __tablename__ = 'users'
 
-    name: Mapped[str] = mapped_column()
-    pw_hash: Mapped[Optional[str]] = mapped_column()
-    salt: Mapped[Optional[str]] = mapped_column()
+    name: Mapped[str] = mapped_column(String(50))
+    pw_hash: Mapped[Optional[str]] = mapped_column(String(300))
+    salt: Mapped[Optional[str]] = mapped_column(String(100))
     configs: Mapped[List["UserConfigDBO"]] = relationship()
 
     @validates("name")

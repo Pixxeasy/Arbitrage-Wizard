@@ -1,9 +1,8 @@
 from typing import List
 
-from Demos.win32ts_logoff_disconnected import session
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from sqlalchemy import select, func, desc, case, literal_column
+import datetime as dt
+from sqlalchemy import select, func, desc, case, literal_column, delete
 from sqlalchemy.orm import aliased, joinedload, with_loader_criteria
 
 from api.schema.Arbitrage import ArbitrageGroupResponse, HistoricArbitrage
@@ -11,7 +10,6 @@ from database.model.ArbitrageOpportunity import ArbitrageGroupDBO, ArbitrageOppo
 from database.model.Exchange import ExchangeDBO
 from database.model.User import UserDBO
 from database.model.UserConfig import UserConfigDBO
-from model.ArbitrageModel import ArbitrageOpportunity
 from model import ExchangeInfo
 
 
@@ -20,7 +18,7 @@ def get_current_arbitrage_by_user_config(user: UserDBO, db: Session, count: int 
     current_time = ExchangeInfo.get_last_total_time(1)
     if not earliest_ts:
         if not current_time:
-            current_time = datetime.utcnow().timestamp()
+            current_time = dt.datetime.now(dt.UTC).timestamp()
         return [], int(current_time)
     min_count = count
 
@@ -90,7 +88,7 @@ def get_current_arbitrage_by_user_config(user: UserDBO, db: Session, count: int 
 
 def get_historic_arbitrages(db: Session, limit: int = 100):
 
-    split_time = 120
+    split_time = 3*ExchangeInfo.get_relaxed_time()
     history = []
     time_diff_cte = (
         select(
@@ -166,3 +164,12 @@ def get_historic_arbitrages(db: Session, limit: int = 100):
         history.append(arbitrage_dbo)
 
     return history
+
+def delete_old_arbitrages(db: Session):
+    lower_limit = int((dt.datetime.now(dt.UTC) - dt.timedelta(days=1)).timestamp())
+
+    stmt = delete(ArbitrageGroupDBO).where(ArbitrageGroupDBO.created_at <= lower_limit)
+
+    db.execute(stmt)
+    db.commit()
+

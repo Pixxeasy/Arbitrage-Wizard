@@ -115,7 +115,7 @@ const ConfigList: React.FC = () => {
             onSubmit={handleSubmit}
             enableReinitialize={true} // Allows the form to update when editableData changes
         >
-            {({ values, errors, touched }) => (
+            {({ values }) => (
                 <>
                     {/* Conditionally render form or loading spinner */}
                     {loadSuccess && editableData.length > 0 ? (

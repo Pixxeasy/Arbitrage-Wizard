@@ -18,7 +18,7 @@ class ArbitrageOpportunityDBO(BaseDBO, TimestampMixin):
     buy_price: Mapped[float]
     sell_price: Mapped[float]
 
-    group_id: Mapped[str] = mapped_column(ForeignKey('arbitrage_groups.guid'))
+    group_id: Mapped[str] = mapped_column(String(100),ForeignKey('arbitrage_groups.guid'))
 
 
 
@@ -26,10 +26,10 @@ class ArbitrageOpportunityDBO(BaseDBO, TimestampMixin):
 class ArbitrageGroupDBO(BaseDBO, TimestampMixin):
     __tablename__ = 'arbitrage_groups'
 
-    buy_exchange_key: Mapped[str] = mapped_column(ForeignKey('exchanges.config_key'))
-    sell_exchange_key: Mapped[str] = mapped_column(ForeignKey('exchanges.config_key'))
-    trading_pair: Mapped[str]
-    chain: Mapped[str]
-    opportunities: Mapped[List["ArbitrageOpportunityDBO"]] = relationship()
+    buy_exchange_key: Mapped[str] = mapped_column(String(3),ForeignKey('exchanges.config_key'))
+    sell_exchange_key: Mapped[str] = mapped_column(String(3),ForeignKey('exchanges.config_key'))
+    trading_pair: Mapped[str] = mapped_column(String(50))
+    chain: Mapped[str] = mapped_column(String(50))
+    opportunities: Mapped[List["ArbitrageOpportunityDBO"]] = relationship(cascade="all, delete-orphan")
 
 
