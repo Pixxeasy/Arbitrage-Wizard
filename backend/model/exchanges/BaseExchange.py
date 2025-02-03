@@ -4,7 +4,7 @@ import uuid
 from typing import Dict, Any, Self, Optional
 
 import ccxt.async_support as ccxt
-from ccxt.base.errors import ExchangeError, ExchangeNotAvailable, RequestTimeout
+from ccxt.base.errors import ExchangeError, ExchangeNotAvailable, RequestTimeout, InvalidNonce
 from pydantic import BaseModel, Field, model_validator
 
 from model.Orders import Order, OrderBook
@@ -68,6 +68,10 @@ class BaseExchange(BaseModel):
         try:
             prices = await self.exchange.fetch_tickers()
         except RequestTimeout:
+            await asyncio.sleep(1)
+            return await self.load_prices()
+        except InvalidNonce:
+            await self.exchange.load_time_difference()
             return await self.load_prices()
 
         self.add_prices(prices)
