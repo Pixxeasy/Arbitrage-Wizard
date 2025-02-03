@@ -60,8 +60,12 @@ class MEXC(BaseExchange):
 
             return await self.get_orders(symbol)
         except RequestTimeout:
-            await self.exchange.load_time_difference()
             await asyncio.sleep(1)
+            try:
+                await self.exchange.load_time_difference()
+            except RequestTimeout:
+                return await self.get_orders(symbol)
+
             return await self.get_orders(symbol)
 
         return self.create_order_book(symbol, orderbook)
