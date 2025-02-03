@@ -1,6 +1,6 @@
 import asyncio
 from collections import Counter
-from datetime import datetime
+import datetime as dt
 from importlib import import_module
 from typing import List, Dict
 
@@ -21,6 +21,7 @@ from scanner.util import run_periodic
 from ccxt.base.errors import ExchangeNotAvailable
 from scanner.util import DEBUG
 from model import ExchangeInfo
+from api.handler.ArbitrageHandler import delete_old_arbitrages
 
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 1500)
@@ -35,8 +36,10 @@ class ScanRunner:
         self.maxAmount = 1000
 
     async def check_arbitrage(self):
-        time_start = datetime.now()
+        time_start = dt.datetime.now()
         opportunities = []
+
+        delete_old_arbitrages(self.db)
 
         all_pairs = []
         price_task = []
@@ -53,10 +56,13 @@ class ScanRunner:
         for pair in all_pairs:
             op_tasks.append(asyncio.create_task(self.find_opportunities(pair)))
 
-        ops = await tqdm_async.gather(*op_tasks)
-        opportunities = [o for op in ops for o in op]
+        try:
+            ops = await tqdm_async.gather(*op_tasks)
+            opportunities = [o for op in ops for o in op]
+        except Exception:
+            return
 
-        time_end = datetime.now()
+        time_end = dt.datetime.now()
         total_time = (time_end - time_start).total_seconds()
         if DEBUG:
             if len(opportunities)>0:
@@ -65,7 +71,7 @@ class ScanRunner:
             print(f"Took {total_time} seconds")
 
         ExchangeInfo.add_time(total_time)
-        ExchangeInfo.add_total_time(int(datetime.utcnow().timestamp()))
+        ExchangeInfo.add_total_time(int(dt.datetime.now(dt.UTC).timestamp()))
 
 
 
@@ -144,15 +150,16 @@ class ScanRunner:
             if pair in list(ex.trading_pairs.keys()):
                 compare_prices.append(ex.trading_pairs[pair])
 
-        #No common trading pair in 2 exchanges was found
-        if len(compare_prices) < 2:
-            return opportunities
 
         #Filter all for which no prices have been found
         filtered_pairs = [pair for pair in compare_prices if pair.buy_price and pair.sell_price]
 
-        #Find best sell und buy price
+        #No common trading pair in 2 exchanges was found
+        if len(filtered_pairs) < 2:
+            return opportunities
 
+
+        #Find best sell und buy price
         sell_prices = sorted(filtered_pairs, key=lambda s: s.sell_price, reverse=True)
         buy_prices = sorted(filtered_pairs, key=lambda s: s.buy_price)
 
