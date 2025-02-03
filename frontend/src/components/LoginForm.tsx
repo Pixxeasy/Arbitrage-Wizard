@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import {Field, Formik, useFormik} from "formik";
+import React from 'react';
+import {Field, Formik} from "formik";
 import {
     Box,
     Button,
@@ -41,14 +41,13 @@ const LoginForm: React.FC = () => {
                     onSubmit={async (data) => {
                         try {
                             const token = await login(data).unwrap()
-                            console.log(token)
                             dispatch(setCredentials({token: token.access_token}))
                             navigate('/dashboard')
                         } catch (err) {
                             toast({
                                 status: 'error',
                                 title: 'Error',
-                                description: err.message,
+                                description: err.error,
                                 isClosable: true,
                             })
 
