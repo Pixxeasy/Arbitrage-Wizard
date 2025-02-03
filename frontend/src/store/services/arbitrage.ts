@@ -19,6 +19,10 @@ export const arbitrageApi = protectedBaseApi.injectEndpoints({
                     throw new Error("Server response malformed");
                 }
 
+                if (!response?.last_update) {
+                    throw new Error("Server response malformed");
+                }
+
                 const groups: ArbitrageGroup[] = response.arbitrages.map((item: ArbitrageGroupResponse) => {
                     return {
                         "buyExchange": item.buy_exchange_name,
