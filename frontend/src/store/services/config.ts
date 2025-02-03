@@ -1,5 +1,5 @@
 import {protectedBaseApi} from "./base.ts";
-import {BaseQueryArg, FetchBaseQueryError} from "@reduxjs/toolkit/query";
+import { FetchBaseQueryError} from "@reduxjs/toolkit/query";
 import {ConfigResponse, ExchangeResponse, UserConfig} from "../../types/UserConfig.ts";
 
 export const configApi = protectedBaseApi.injectEndpoints({

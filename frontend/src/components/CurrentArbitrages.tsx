@@ -14,7 +14,7 @@ import {
     VStack
 } from "@chakra-ui/react";
 import {ArbitrageGroup, ArbitrageOpportunity} from "../types/Arbitrage"
-import React, {useState, useEffect} from "react";
+import React, {useState} from "react";
 import { motion } from "framer-motion";
 import {ChevronLeftIcon, ArrowForwardIcon} from "@chakra-ui/icons";
 import moment from "moment";
@@ -24,9 +24,9 @@ const ArbitrageOpportunityItem: React.FC<{opportunity: ArbitrageOpportunity}> = 
     <HStack align="center">
         <Text>Kaufpreis: {opportunity.buyPrice.toFixed(4)}</Text>
         <Text>Verkauspreis: {opportunity.sellPrice.toFixed(4)}</Text>
-        <Text>Startbetrag: {opportunity.minAmountStart.toFixed(4)} - {opportunity.maxAmountStart.toFixed(4)} USDT</Text>
-        <Text>Endbetrag: {opportunity.minAmountEnd.toFixed(4)} - {opportunity.maxAmountEnd.toFixed(4)} USDT</Text>
-        <Text>Profit: {opportunity.minProfit.toFixed(4)} - {opportunity.maxProfit.toFixed(4)} USDT</Text>
+        <Text>Startbetrag: {opportunity.minAmountStart?.toFixed(4)} - {opportunity.maxAmountStart?.toFixed(4)} USDT</Text>
+        <Text>Endbetrag: {opportunity.minAmountEnd?.toFixed(4)} - {opportunity.maxAmountEnd?.toFixed(4)} USDT</Text>
+        <Text>Profit: {opportunity.minProfit?.toFixed(4)} - {opportunity.maxProfit?.toFixed(4)} USDT</Text>
     </HStack>
 )
 
@@ -84,7 +84,7 @@ function ArbitrageList() {
             <Box justifyContent={"right"}><Text>
                 Last Client Update: {isSuccess && moment(data.clientTime).format("HH:mm:ss")}
             </Text>
-            <Text>Last Server Update: { isSuccess && moment.utc(data.lastUpdate+3600000).local().format("HH:mm:ss")}</Text></Box>
+            <Text>Last Server Update: { isSuccess && moment.utc(data.lastUpdate).local().format("HH:mm:ss")}</Text></Box>
             {
                 (isLoading && !data ) && <Stack>
                     <Skeleton height='20px' />
@@ -105,7 +105,7 @@ function ArbitrageList() {
                 <Alert status='error'>
                     <AlertIcon />
                     <AlertTitle>Error fetching data</AlertTitle>
-                    <AlertDescription>{error.message}</AlertDescription>
+                    <AlertDescription>{error.error}</AlertDescription>
                 </Alert>
             }
             {
