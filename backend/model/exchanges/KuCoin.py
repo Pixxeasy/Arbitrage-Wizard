@@ -15,8 +15,11 @@ class KuCoin(BaseExchange):
 
     async def load_trading_pairs(self):
         self.exchange.timeout = 30000
-
-        await self.load_trading_pairs_base(info_active={"key": "enableTrading", "value": True}, contract_address=["info", "contractAddress"])
+        try:
+            await self.load_trading_pairs_base(info_active={"key": "enableTrading", "value": True}, contract_address=["info", "contractAddress"])
+        except InvalidNonce:
+            await self.exchange.load_time_difference()
+            await self.load_trading_pairs()
 
     async def get_orders(self, symbol) -> OrderBook:
         try:
