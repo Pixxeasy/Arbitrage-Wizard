@@ -1,5 +1,7 @@
+import asyncio
 from typing import Optional
 from model.exchanges.BaseExchange import BaseExchange
+from ccxt import RequestTimeout
 
 chains = {
     "BSC_BNB": "BEP20",
@@ -27,7 +29,11 @@ class BitMart(BaseExchange):
 
     async def fetch_currencies(self):
 
-        currencies = await self.exchange.fetch("https://api-cloud.bitmart.com/account/v1/currencies")
+        try:
+            currencies = await self.exchange.fetch("https://api-cloud.bitmart.com/account/v1/currencies")
+        except RequestTimeout:
+            asyncio.sleep(1)
+            currencies = await self.exchange.fetch("https://api-cloud.bitmart.com/account/v1/currencies")
 
         currency_list = {}
 
