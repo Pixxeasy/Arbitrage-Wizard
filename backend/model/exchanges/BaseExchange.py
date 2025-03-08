@@ -117,17 +117,21 @@ class BaseExchange(BaseModel):
         return self.create_order_book(symbol, orderbook)
 
     async def load_trading_pairs_base(self, info_active = None, contract_address= [], currencies= None, fee_rate=None):
-        if contract_address is None:
-            contract_address = []
 
+        # Load all symbols
         try:
             symbols = await self.exchange.fetch_markets()
         except RequestTimeout:
             await asyncio.sleep(1)
             symbols = await self.exchange.fetch_markets()
 
+        # Load all currencies
         if not currencies:
-            currencies = await self.exchange.fetch_currencies()
+            try:
+                currencies = await self.exchange.fetch_currencies()
+            except RequestTimeout:
+                await asyncio.sleep(1)
+                currencies = await self.exchange.fetch_currencies()
 
         for symbol in symbols:
             if symbol["type"] != "spot":
