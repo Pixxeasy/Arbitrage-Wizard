@@ -1,0 +1,32 @@
+{
+  "name": "arbitrage-wizard",
+  "version": "1.0.0",
+  "description": "Cryptocurrency arbitrage trading platform",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": ".\\tools\\dev.bat",
+    "dev:unix": "./tools/dev.sh",
+    "dev:powershell": "powershell -ExecutionPolicy Bypass -File .\\tools\\dev.ps1",
+    "dev:frontend": "npm run dev --workspace=apps/frontend",
+    "dev:backend": "cd apps/backend-api && conda activate arbitrage-wizard-backend && python -m uvicorn app.main:app --reload",
+    "build:frontend": "npm run build --workspace=apps/frontend",
+    "lint:frontend": "npm run lint --workspace=apps/frontend",
+    "type-check:frontend": "npm run type-check --workspace=apps/frontend",
+    "test:backend": "cd apps/backend-api && python -m pytest",
+    "install:all": "npm install && npm run install:backend",
+    "install:backend": "cd apps/backend-api && conda env create -f environment.yml",
+    "update:backend": "cd apps/backend-api && conda env update -f environment.yml --prune"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}

@@ -1,0 +1,8 @@
+.conda
+*__pycache__
+scanner/conf/data.db
+scanner/.env
+.vscode
+.idea
+endpoint/initData/
+application_default_credentials.json

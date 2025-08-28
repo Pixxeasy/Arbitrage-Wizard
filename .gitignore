@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Frontend environment files (allow .env.development and .env.production to be committed)
+.env.development 
+.env.production
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+
+# IDE files
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Python cache
+*.pyc
+
+# Deployment artifacts
+deploy/
+*.zip
+
+# Claude Code
+.claude/
+
+# Database files (if any local DBs)
+*.db
+*.sqlite
+
+# Temporary files
+tmp/
+temp/

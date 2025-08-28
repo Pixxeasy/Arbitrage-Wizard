@@ -1,0 +1,18 @@
+{
+  "search_interval": 10,
+  "exchanges": [
+    "Bitget",
+    "XT",
+    "KuCoin",
+    "MEXC",
+    "BingX",
+    "Bybit",
+    "HTX",
+    "Poloniex",
+    "BitMart",
+    "Okx"
+  ],
+  "debug": false,
+  "db_type": "sqlite",
+  "db_name": "data.db"
+}

@@ -1,0 +1,5 @@
+{
+  "db_type": "sqlite",
+  "db_name": "data.db",
+  "debug": false
+}

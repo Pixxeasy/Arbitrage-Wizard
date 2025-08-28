@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm install
+    
+    - name: Build shared packages
+      run: |
+        cd packages/shared-types && npm run build
+        cd ../shared-utils && npm run build
+        cd ../mexc-sdk && npm run build
+    
+    - name: Lint frontend
+      run: npm run lint:frontend
+    
+    - name: Type check frontend
+      run: npm run type-check:frontend
+    
+    - name: Build frontend
+      run: npm run build:frontend
+
+  backend:
+    runs-on: ubuntu-latest
+    
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test
+          MYSQL_DATABASE: arbitrage_wizard_test
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install dependencies
+      run: |
+        cd apps/backend-api
+        pip install -r requirements.txt
+    
+    - name: Run tests
+      run: |
+        cd apps/backend-api
+        python -m pytest
+      env:
+        DB_HOST: localhost
+        DB_USER: root
+        DB_PASSWORD: test
+        DB_NAME: arbitrage_wizard_test
